@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/seller.html   -   the dashboard
+
+     Two panels that now DO things instead of just reporting:
+       "To deliver"        -> advance or cancel an order
+       "Waiting approval"  -> view / edit / delete a product
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Seller Dashboard</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">SELLER PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+
+    <div class="seller-box" id="sellerBox"></div>
+
+    <nav class="nav">
+      <a href="/seller.html" class="active"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="/seller-products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/seller-orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead"><h2>Dashboard</h2></div>
+    <div id="toast" class="toast"></div>
+
+    <!-- the six cards are plain <a> links, so clicking navigates
+         with no JavaScript at all -->
+    <div class="cards">
+      <a class="card" href="/seller-products.html?tab=all">
+        <div class="label">Total Products</div>
+        <div class="value" id="totalProducts">-</div>
+        <div class="go">View all &rarr;</div>
+      </a>
+      <a class="card" href="/seller-products.html?tab=active">
+        <div class="label">Active Products</div>
+        <div class="value" id="activeProducts">-</div>
+        <div class="go">Products &rarr; Active</div>
+      </a>
+      <a class="card" href="/seller-products.html?tab=pending">
+        <div class="label">Pending Products</div>
+        <div class="value" id="pendingProducts">-</div>
+        <div class="go">Products &rarr; Pending</div>
+      </a>
+      <a class="card" href="/seller-products.html?tab=outofstock">
+        <div class="label">Out of Stock</div>
+        <div class="value" id="outOfStock">-</div>
+        <div class="go">Products &rarr; Out of Stock</div>
+      </a>
+      <a class="card" href="/seller-orders.html?status=pending">
+        <div class="label">Pending Orders</div>
+        <div class="value" id="pendingOrders">-</div>
+        <div class="go">Orders &rarr; Pending</div>
+      </a>
+      <a class="card" href="/seller-orders.html?status=delivered">
+        <div class="label">Total Sales</div>
+        <div class="value" id="totalSales">-</div>
+        <div class="go">Orders &rarr; Delivered</div>
+      </a>
+    </div>
+
+    <div class="panels">
+
+      <div class="panel">
+        <h3>Products to be delivered</h3>
+        <table>
+          <thead>
+            <tr><th>Order</th><th>Items</th><th>Qty</th><th>Deliver to</th><th>Action</th></tr>
+          </thead>
+          <tbody id="deliverBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+        <p style="margin-top:11px;">
+          <a class="btn" href="/seller-orders.html?status=todeliver">Show More</a>
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Waiting for admin approval</h3>
+        <table>
+          <thead>
+            <tr><th>Product</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody id="approvalBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+        </table>
+        <p style="margin-top:11px;">
+          <a class="btn" href="/seller-products.html?tab=pending">Show More</a>
+        </p>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadSellerBox();
+
+// The label on the "move it forward" button depends on where the
+// order currently is. Pending orders get accepted, accepted ones get
+// shipped, shipped ones get marked delivered.
+const NEXT = {
+  Pending:    { to: 'Processing', label: 'Accept'  },
+  Processing: { to: 'Shipped',    label: 'Ship'    },
+  Shipped:    { to: 'Delivered',  label: 'Delivered' }
+};
+
+async function loadDashboard() {
+  const res = await authFetch('/api/seller/dashboard');
+  if (!res.ok) return;
+
+  const data = await res.json();
+  const s = data.stats;
+
+  document.getElementById('totalProducts').textContent   = s.totalProducts;
+  document.getElementById('activeProducts').textContent  = s.activeProducts;
+  document.getElementById('pendingProducts').textContent = s.pendingProducts;
+  document.getElementById('outOfStock').textContent      = s.outOfStock;
+  document.getElementById('pendingOrders').textContent   = s.pendingOrders;
+  document.getElementById('totalSales').textContent      = money(s.totalSales);
+
+  // ---- panel 1 : orders to deliver ----
+  let rows = '';
+  for (const o of data.toDeliver) {
+    const next = NEXT[o.OrderStatus];
+    const place = [o.StreetAddress, o.City, o.District].filter(Boolean).join(', ');
+
+    rows += `<tr>
+      <td>#${o.OrderID}<br><span class="tag ${o.OrderStatus}">${o.OrderStatus}</span></td>
+      <td>${o.Items}</td>
+      <td>${o.TotalQty}</td>
+      <td>${o.ReceiverName ?? '-'}<br><span class="sub">${place || 'No address'}</span>
+          <br><span class="sub">${o.PhoneNumber ?? ''}</span></td>
+      <td>
+        <div class="actions">
+          <button class="btn good"
+                  onclick="moveOrder(${o.OrderID}, '${next.to}')">${next.label}</button>
+          <button class="btn danger"
+                  onclick="cancelOrder(${o.OrderID}, '${o.PaymentStatus}')">Cancel</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+  document.getElementById('deliverBody').innerHTML =
+    rows || '<tr><td colspan="5">Nothing to deliver.</td></tr>';
+
+  // ---- panel 2 : products waiting on the admin ----
+  rows = '';
+  for (const p of data.waitingApproval) {
+    rows += `<tr>
+      <td>${p.ProductName}<br><span class="sub">${money(p.UnitPrice)} &middot; added ${shortDate(p.CreatedAt)}</span></td>
+      <td><span class="tag Pending">Pending</span></td>
+      <td>
+        <div class="actions">
+          <a class="btn" href="/seller-product-view.html?id=${p.ProductID}">View</a>
+          <a class="btn" href="/seller-product-form.html?id=${p.ProductID}">Edit</a>
+          <button class="btn danger"
+                  onclick="removeProduct(${p.ProductID}, '${p.ProductName.replace(/'/g, "")}')">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+  document.getElementById('approvalBody').innerHTML =
+    rows || '<tr><td colspan="3">Nothing waiting.</td></tr>';
+}
+
+// -------------------------------------------------------------------
+//  THE THREE ACTIONS
+//
+//  Each one follows the identical three steps:
+//     1. send the change to the server
+//     2. show what the server said
+//     3. call loadDashboard() again
+//
+//  Step 3 is what makes the screen update with no refresh. The page is
+//  never reloaded - we simply ask for the numbers a second time and
+//  paint them over the old ones.
+// -------------------------------------------------------------------
+
+async function moveOrder(orderId, newStatus) {
+  const res = await authFetch(`/api/seller/orders/${orderId}/status`, {
+    method: 'PATCH',
+    body: { newStatus }
+  });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadDashboard();
+}
+
+async function cancelOrder(orderId, paymentStatus) {
+  const warn = paymentStatus === 'Paid'
+    ? `Cancel order #${orderId}? The customer will be refunded to their wallet immediately.`
+    : `Cancel order #${orderId}?`;
+
+  if (!confirm(warn)) return;
+
+  const res = await authFetch(`/api/seller/orders/${orderId}/status`, {
+    method: 'PATCH',
+    body: { newStatus: 'Cancelled' }
+  });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadDashboard();
+}
+
+async function removeProduct(productId, name) {
+  if (!confirm(`Delete "${name}" permanently?`)) return;
+
+  const res = await authFetch(`/api/seller/products/${productId}`, { method: 'DELETE' });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadDashboard();   // the six counters above update too
+}
+
+loadDashboard();
+
+// and pick up changes made by the admin in another window
+autoRefresh(loadDashboard, 5);
+</script>
+</body>
+</html>

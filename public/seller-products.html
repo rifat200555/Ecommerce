@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/seller-products.html
+
+     The five tabs stay exactly as they were, plus an Add Product
+     button. Each row shows only what you need to scan a list -
+     name, stock, status - and four buttons. Price, brand and category
+     live on the View page.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Products</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">SELLER PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/seller.html"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="/seller-products.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/seller-orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead"><h2>Products</h2></div>
+    <div id="toast" class="toast"></div>
+
+    <div class="tabs" id="tabs">
+      <a href="?tab=all">All</a>
+      <a href="?tab=active">Active</a>
+      <a href="?tab=pending">Pending</a>
+      <a href="?tab=inactive">Inactive</a>
+      <a href="?tab=outofstock">Out of Stock</a>
+      <span class="spacer"></span>
+      <a class="btn primary" href="/seller-product-form.html">+ Add Product</a>
+    </div>
+
+    <div class="panel wide">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:38%">Product</th>
+            <th>Stock left</th>
+            <th>Admin status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="body"><tr><td colspan="4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadSellerBox();
+
+// URLSearchParams reads the "?tab=active" part of the address bar.
+// It is the browser-side twin of req.query on the server.
+const tab = new URLSearchParams(window.location.search).get('tab') || 'all';
+
+for (const a of document.querySelectorAll('#tabs a')) {
+  if (a.getAttribute('href') === '?tab=' + tab) a.classList.add('active');
+}
+
+async function loadProducts() {
+  const res = await authFetch('/api/seller/products?tab=' + tab);
+  if (!res.ok) return;
+
+  const data = await res.json();
+  let rows = '';
+
+  for (const p of data.products) {
+    // Out of stock is worked out here, not stored in the database:
+    // an Active product whose stock hit zero.
+    const outOfStock = p.Status === 'Active' && p.StockQuantity === 0;
+    const shownStatus = outOfStock ? 'OutOfStock' : p.Status;
+    const shownLabel  = outOfStock ? 'Out of Stock' : p.Status;
+
+    // Mode button. A Pending product has no mode - the admin has not
+    // decided about it yet - so we leave the slot empty.
+    let modeBtn = '';
+    if (p.Status === 'Active') {
+      modeBtn = `<button class="btn" onclick="setMode(${p.ProductID},'off')">Turn Off</button>`;
+    } else if (p.Status === 'Inactive') {
+      modeBtn = `<button class="btn" onclick="setMode(${p.ProductID},'on')">Turn On</button>`;
+    }
+    if (outOfStock) {
+      modeBtn = `<button class="btn" onclick="setMode(${p.ProductID},'on')">Restock</button>`;
+    }
+
+    rows += `<tr>
+      <td>${p.ProductName}<br><span class="sub">ID ${p.ProductID} &middot; added ${shortDate(p.CreatedAt)}</span></td>
+      <td>${p.StockQuantity}</td>
+      <td><span class="tag ${shownStatus}">${shownLabel}</span></td>
+      <td>
+        <div class="actions">
+          <a class="btn" href="/seller-product-view.html?id=${p.ProductID}">View</a>
+          <a class="btn" href="/seller-product-form.html?id=${p.ProductID}">Edit</a>
+          ${modeBtn}
+          <button class="btn danger"
+                  onclick="removeProduct(${p.ProductID}, '${p.ProductName.replace(/'/g, "")}')">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  document.getElementById('body').innerHTML =
+    rows || '<tr><td colspan="4">No products in this tab.</td></tr>';
+}
+
+async function removeProduct(productId, name) {
+  if (!confirm(`Delete "${name}" permanently?`)) return;
+
+  const res = await authFetch(`/api/seller/products/${productId}`, { method: 'DELETE' });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadProducts();     // the row disappears without a page reload
+}
+
+async function setMode(productId, mode) {
+  let body = { mode };
+
+  // Switching a product back ON always needs a fresh stock number -
+  // your rule. Switching it off does not.
+  if (mode === 'on') {
+    const qty = prompt('New stock quantity:');
+    if (qty === null) return;
+    if (qty === '' || isNaN(qty) || Number(qty) < 0) {
+      toast('Enter a valid number', true);
+      return;
+    }
+    body.stockQuantity = Number(qty);
+  }
+
+  const res = await authFetch(`/api/seller/products/${productId}/mode`, {
+    method: 'PATCH', body
+  });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadProducts();
+}
+
+loadProducts();
+autoRefresh(loadProducts, 5);
+</script>
+</body>
+</html>

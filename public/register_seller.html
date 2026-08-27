@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Create Seller Account</title>
+</head>
+<body style="font-family: sans-serif; max-width: 380px; margin: 50px auto;">
+
+  <h2>Create a Seller Account</h2>
+
+  <h4>Your details</h4>
+  <input id="fullName" placeholder="Full name *" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="email" type="email" placeholder="Email *" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="password" type="password" placeholder="Password (min 6) *" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="phone" placeholder="Phone" style="width:100%; padding:8px; margin:5px 0;">
+
+  <h4>Your store</h4>
+  <input id="storeName" placeholder="Store name *" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="businessEmail" type="email" placeholder="Business email" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="businessPhone" placeholder="Business phone" style="width:100%; padding:8px; margin:5px 0;">
+  <input id="tradeLicenseNumber" placeholder="Trade license number" style="width:100%; padding:8px; margin:5px 0;">
+
+  <button id="registerBtn" style="width:100%; padding:10px; margin-top:10px;">Create Account</button>
+
+  <p id="message"></p>
+  <p><a href="/login.html">Already have an account? Log in</a></p>
+
+<script>
+const val = (id) => document.getElementById(id).value.trim();
+
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  const message = document.getElementById('message');
+  message.textContent = '';
+  message.style.color = 'red';
+
+  const body = {
+    fullName:           val('fullName'),
+    email:              val('email'),
+    password:           val('password'),
+    phone:              val('phone'),
+    storeName:          val('storeName'),
+    businessEmail:      val('businessEmail'),
+    businessPhone:      val('businessPhone'),
+    tradeLicenseNumber: val('tradeLicenseNumber')
+  };
+
+  try {
+    const res = await fetch('/api/auth/register_seller', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      message.textContent = data.message;
+      return;
+    }
+
+    // message.style.color = 'green';
+    // message.textContent = data.message + ' Redirecting...';
+    // setTimeout(() => { window.location.href = '/login.html'; }, 1500);
+    localStorage.setItem('token', data.token);
+    window.location.href = data.redirect;
+
+  } catch (err) {
+    message.textContent = 'Could not reach the server';
+  }
+});
+</script>
+</body>
+</html>

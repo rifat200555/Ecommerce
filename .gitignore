@@ -1,0 +1,22 @@
+# -------- never commit --------
+node_modules/
+.env
+
+# -------- editor / OS noise --------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# -------- NOTE ABOUT public/uploads --------
+# Ignored, because scripts/seedData.js writes placeholder images into
+# it every time it runs. Nothing in there needs to travel through git.
+#
+# Anything you upload yourself through the Edit form also lands here
+# and is NOT committed - so a product you add on your machine will show
+# a broken image on someone else's until they upload their own.
+# That is the usual trade-off: on a real project uploads go to cloud
+# storage, not into the repo.
+public/uploads/

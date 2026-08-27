@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/admin.html
+
+     Opens straight onto the Pending list, because approving products
+     is the only thing the admin has to do in this milestone.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">ADMIN PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/admin.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Product Approval</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Sellers</span></a>
+      <a href="#"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead"><h2>Product Approval</h2></div>
+    <div id="toast" class="toast"></div>
+
+    <div class="tabs" id="tabs">
+      <a href="?status=Pending">Pending</a>
+      <a href="?status=Active">Approved</a>
+      <a href="?status=Rejected">Rejected</a>
+      <a href="?status=Inactive">Inactive</a>
+      <a href="?status=all">All</a>
+    </div>
+
+    <div class="panel wide">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32%">Product</th>
+            <th>Seller</th><th>Price</th><th>Stock</th>
+            <th>Status</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="body"><tr><td colspan="6">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadAdminBox();
+
+// No ?status in the URL defaults to Pending, so simply typing
+// /admin.html lands you on the work that needs doing.
+const status = new URLSearchParams(window.location.search).get('status') || 'Pending';
+
+for (const a of document.querySelectorAll('#tabs a')) {
+  if (a.getAttribute('href') === '?status=' + status) a.classList.add('active');
+}
+
+async function loadProducts() {
+  const res = await authFetch('/api/admin/products?status=' + status);
+  if (!res.ok) return;
+
+  const data = await res.json();
+  let rows = '';
+
+  for (const p of data.products) {
+    // Which buttons make sense depends on where the product is now.
+    let buttons = '';
+    if (p.Status === 'Pending') {
+      buttons = `<button class="btn good"   onclick="setStatus(${p.ProductID},'Active')">Approve</button>
+                 <button class="btn danger" onclick="setStatus(${p.ProductID},'Rejected')">Reject</button>`;
+    } else if (p.Status === 'Rejected') {
+      buttons = `<button class="btn good" onclick="setStatus(${p.ProductID},'Active')">Approve anyway</button>`;
+    } else if (p.Status === 'Active') {
+      buttons = `<button class="btn danger" onclick="setStatus(${p.ProductID},'Rejected')">Take down</button>`;
+    }
+
+    rows += `<tr>
+      <td>${p.ProductName}
+          <br><span class="sub">${p.CategoryName ?? '-'} &middot; ${p.BrandName ?? '-'} &middot; added ${shortDate(p.CreatedAt)}</span></td>
+      <td>${p.StoreName}<br><span class="sub">ID ${p.SellerID}</span></td>
+      <td>${money(p.UnitPrice)}${Number(p.Discount) > 0 ? `<br><span class="sub">${p.Discount}% off</span>` : ''}</td>
+      <td>${p.StockQuantity}</td>
+      <td><span class="tag ${p.Status}">${p.Status}</span></td>
+      <td><div class="actions">${buttons || '<span class="sub">-</span>'}</div></td>
+    </tr>`;
+  }
+
+  document.getElementById('body').innerHTML =
+    rows || '<tr><td colspan="6">Nothing here.</td></tr>';
+}
+
+async function setStatus(productId, newStatus) {
+  const res = await authFetch(`/api/admin/products/${productId}/status`, {
+    method: 'PATCH',
+    body: { newStatus }
+  });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadProducts();
+}
+
+loadProducts();
+autoRefresh(loadProducts, 5);
+</script>
+</body>
+</html>

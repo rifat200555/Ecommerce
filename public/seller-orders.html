@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/seller-orders.html
+
+     Same columns as before. What changed is the Status column: it is
+     now a set of buttons that actually move the order along, and it
+     goes read-only once the order is Delivered or Cancelled.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Orders</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">SELLER PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/seller.html"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="/seller-products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/seller-orders.html" class="active"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead"><h2>Orders</h2></div>
+    <div id="toast" class="toast"></div>
+
+    <div class="tabs" id="tabs">
+      <a href="?status=all">All</a>
+      <a href="?status=todeliver">To Deliver</a>
+      <a href="?status=pending">Pending</a>
+      <a href="?status=processing">Processing</a>
+      <a href="?status=shipped">Shipped</a>
+      <a href="?status=delivered">Delivered</a>
+      <a href="?status=cancelled">Cancelled</a>
+    </div>
+
+    <div class="panel wide">
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th><th>Date</th><th>Customer</th><th>Product</th>
+            <th>Qty</th><th>Subtotal</th><th>Payment</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="body"><tr><td colspan="8">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadSellerBox();
+
+const status = new URLSearchParams(window.location.search).get('status') || 'all';
+
+for (const a of document.querySelectorAll('#tabs a')) {
+  if (a.getAttribute('href') === '?status=' + status) a.classList.add('active');
+}
+
+// friendlier words for the same transitions
+const LABEL = {
+  Processing: 'Accept',
+  Shipped:    'Ship',
+  Delivered:  'Delivered',
+  Cancelled:  'Cancel'
+};
+
+async function loadOrders() {
+  const res = await authFetch('/api/seller/orders?status=' + status);
+  if (!res.ok) return;
+
+  const data = await res.json();
+
+  // The server sent its own rules table along with the data, so the
+  // page and the server can never disagree about what is allowed.
+  const nextStatus = data.nextStatus;
+
+  let rows = '';
+  for (const o of data.orders) {
+    const allowed = nextStatus[o.OrderStatus] || [];
+
+    // An empty list means Delivered or Cancelled - frozen. We show
+    // the tag on its own, with no buttons at all.
+    let cell = `<span class="tag ${o.OrderStatus}">${o.OrderStatus}</span>`;
+
+    if (allowed.length > 0) {
+      let buttons = '';
+      for (const next of allowed) {
+        const cls = next === 'Cancelled' ? 'danger' : 'good';
+        buttons += `<button class="btn ${cls}"
+                      onclick="moveOrder(${o.OrderID}, '${next}', '${o.PaymentStatus}')">
+                      ${LABEL[next]}</button>`;
+      }
+      cell += `<div class="actions" style="margin-top:5px;">${buttons}</div>`;
+    }
+
+    rows += `<tr>
+      <td>#${o.OrderID}</td>
+      <td>${shortDate(o.OrderDate)}</td>
+      <td>${o.CustomerName}</td>
+      <td>${o.ProductName}</td>
+      <td>${o.Quantity}</td>
+      <td>${money(o.SubTotal)}</td>
+      <td>${o.PaymentStatus}</td>
+      <td>${cell}</td>
+    </tr>`;
+  }
+
+  document.getElementById('body').innerHTML =
+    rows || '<tr><td colspan="8">No orders here.</td></tr>';
+}
+
+async function moveOrder(orderId, newStatus, paymentStatus) {
+  if (newStatus === 'Cancelled') {
+    const warn = paymentStatus === 'Paid'
+      ? `Cancel order #${orderId}? The customer is refunded to their wallet immediately.`
+      : `Cancel order #${orderId}?`;
+    if (!confirm(warn)) return;
+  }
+
+  const res = await authFetch(`/api/seller/orders/${orderId}/status`, {
+    method: 'PATCH',
+    body: { newStatus }
+  });
+  const data = await res.json();
+
+  toast(data.message, !res.ok);
+  await loadOrders();
+}
+
+loadOrders();
+autoRefresh(loadOrders, 5);
+</script>
+</body>
+</html>

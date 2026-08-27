@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/seller-product-form.html          -> ADD a new product
+     public/seller-product-form.html?id=5     -> EDIT product 5
+
+     ONE file does both. The only difference is whether an id came in
+     through the URL.
+
+     Images are now picked from your computer. The important change is
+     at the bottom: the body is a FormData object instead of JSON,
+     because JSON cannot carry a file.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Product form</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">SELLER PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/seller.html"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="/seller-products.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/seller-orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2 id="title">Add Product</h2>
+      <a class="btn" href="/seller-products.html">&larr; Back to products</a>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <div class="form">
+      <div class="field">
+        <label>Product name *</label>
+        <input id="productName">
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        <textarea id="description"></textarea>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Price *</label>
+          <input id="unitPrice" type="number" step="0.01" min="0">
+        </div>
+        <div class="field">
+          <label>Discount (%)</label>
+          <input id="discount" type="number" step="0.01" min="0" max="100" value="0">
+        </div>
+        <div class="field">
+          <label>Stock quantity</label>
+          <input id="stockQuantity" type="number" min="0" value="0">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Category</label>
+          <select id="categoryId"><option value="">-- none --</option></select>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <select id="brandId"><option value="">-- none --</option></select>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Warranty</label>
+          <input id="warranty" placeholder="1 Year">
+        </div>
+        <div class="field">
+          <label>Weight (kg)</label>
+          <input id="weight" type="number" step="0.01" min="0">
+        </div>
+      </div>
+
+      <!-- images already saved for this product (edit mode only) -->
+      <div class="field" id="existingWrap" style="display:none;">
+        <label>Current images &mdash; click &times; to remove</label>
+        <div class="thumbs" id="existing"></div>
+      </div>
+
+      <div class="field">
+        <label>Add images from your computer</label>
+        <input id="imageFiles" type="file" multiple accept="image/*">
+        <p class="sub" style="margin-top:5px;">
+          Up to 5 images, 2&nbsp;MB each. JPG, PNG, WEBP or GIF.
+          The first image in the list becomes the primary one.
+        </p>
+        <div class="thumbs" id="preview"></div>
+      </div>
+
+      <p class="sub" id="statusNote" style="margin-bottom:12px;"></p>
+
+      <button class="btn primary big" id="saveBtn">Save</button>
+      <a class="btn big" href="/seller-products.html">Cancel</a>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadSellerBox();
+
+const productId = new URLSearchParams(window.location.search).get('id');
+const isEdit = Boolean(productId);
+
+if (isEdit) {
+  document.getElementById('title').textContent = 'Edit Product';
+  document.getElementById('statusNote').textContent =
+    'Editing does not send the product back for admin approval.';
+} else {
+  document.getElementById('statusNote').textContent =
+    'A new product starts as Pending until an admin approves it.';
+}
+
+const val = (id) => document.getElementById(id).value.trim();
+
+// The paths of the already-saved images we intend to KEEP.
+// Clicking the little x removes one from this list. Whatever survives
+// gets sent back to the server as keepImages.
+let keptImages = [];
+
+function drawExisting() {
+  const wrap = document.getElementById('existingWrap');
+  const box = document.getElementById('existing');
+
+  if (keptImages.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  let html = '';
+  for (let i = 0; i < keptImages.length; i++) {
+    html += `<div class="t" style="position:relative;" title="${keptImages[i]}">
+        <img src="${keptImages[i]}" onerror="this.style.display='none'">
+        <button type="button" onclick="dropImage(${i})"
+                style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;
+                       border-radius:50%;border:1px solid #cbd5e1;background:#fff;
+                       cursor:pointer;font-size:11px;line-height:1;">&times;</button>
+      </div>`;
+  }
+  box.innerHTML = html;
+}
+
+// splice(i, 1) removes exactly one item at position i
+function dropImage(i) {
+  keptImages.splice(i, 1);
+  drawExisting();
+}
+
+// ---------------------------------------------------------------------
+//  Preview the files you just picked, before uploading.
+//
+//  URL.createObjectURL makes a temporary address that points at the
+//  file sitting on your own machine. Nothing is sent to the server
+//  yet - this is purely so you can see what you selected.
+// ---------------------------------------------------------------------
+document.getElementById('imageFiles').addEventListener('change', (e) => {
+  const files = e.target.files;
+  let html = '';
+
+  for (const f of files) {
+    html += `<div class="t" title="${f.name}">
+               <img src="${URL.createObjectURL(f)}">
+             </div>`;
+  }
+
+  document.getElementById('preview').innerHTML = html;
+
+  if (files.length > 5) {
+    toast('Only the first 5 images will be uploaded', true);
+  }
+});
+
+// ---------------------------------------------------------------------
+//  dropdowns
+// ---------------------------------------------------------------------
+async function loadMeta() {
+  const res = await authFetch('/api/seller/meta');
+  if (!res.ok) return;
+
+  const data = await res.json();
+
+  const cat = document.getElementById('categoryId');
+  for (const c of data.categories) {
+    cat.innerHTML += `<option value="${c.CategoryID}">${c.CategoryName}</option>`;
+  }
+
+  const br = document.getElementById('brandId');
+  for (const b of data.brands) {
+    br.innerHTML += `<option value="${b.BrandID}">${b.BrandName}</option>`;
+  }
+}
+
+// ---------------------------------------------------------------------
+//  THE PREFILL - what stops you retyping everything on an edit.
+// ---------------------------------------------------------------------
+async function loadExisting() {
+  const res = await authFetch('/api/seller/products/' + productId);
+  if (!res.ok) { toast('Product not found', true); return; }
+
+  const data = await res.json();
+  const p = data.product;
+
+  document.getElementById('productName').value   = p.ProductName ?? '';
+  document.getElementById('description').value   = p.Description ?? '';
+  document.getElementById('unitPrice').value     = p.UnitPrice ?? '';
+  document.getElementById('discount').value      = p.Discount ?? 0;
+  document.getElementById('stockQuantity').value = p.StockQuantity ?? 0;
+  document.getElementById('warranty').value      = p.Warranty ?? '';
+  document.getElementById('weight').value        = p.Weight ?? '';
+  document.getElementById('categoryId').value    = p.CategoryID ?? '';
+  document.getElementById('brandId').value       = p.BrandID ?? '';
+
+  keptImages = data.images.map(i => i.ImageURL);
+  drawExisting();
+}
+
+// ---------------------------------------------------------------------
+//  SAVE
+//
+//  This is the one real change from before. The body used to be a
+//  plain object that authFetch turned into JSON. It is now a FormData
+//  object, which is the only kind of body that can carry a file.
+//
+//  Every value is appended by name. The server reads the text fields
+//  from req.body and the files from req.files.
+// ---------------------------------------------------------------------
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const name = val('productName');
+  const price = val('unitPrice');
+
+  if (!name || price === '') {
+    toast('Product name and price are required', true);
+    return;
+  }
+
+  const fd = new FormData();
+
+  fd.append('productName',   name);
+  fd.append('description',   val('description'));
+  fd.append('unitPrice',     price);
+  fd.append('discount',      val('discount') || 0);
+  fd.append('stockQuantity', val('stockQuantity') || 0);
+  fd.append('categoryId',    val('categoryId'));
+  fd.append('brandId',       val('brandId'));
+  fd.append('warranty',      val('warranty'));
+  fd.append('weight',        val('weight'));
+
+  // The same name appended several times is how you send a list.
+  // The server turns it back into an array with its toArray helper.
+  for (const url of keptImages) {
+    fd.append('keepImages', url);
+  }
+
+  // 'images' must match upload.array('images', 5) in the middleware.
+  // These are the actual files, not text.
+  const files = document.getElementById('imageFiles').files;
+  for (const f of files) {
+    fd.append('images', f);
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+
+  const url    = isEdit ? '/api/seller/products/' + productId : '/api/seller/products';
+  const method = isEdit ? 'PUT' : 'POST';
+
+  // note: body is the FormData itself. authFetch spots that and
+  // leaves it untouched.
+  const res = await authFetch(url, { method, body: fd });
+  const data = await res.json();
+
+  btn.disabled = false;
+  btn.textContent = 'Save';
+
+  if (!res.ok) { toast(data.message, true); return; }
+
+  toast(data.message, false);
+  setTimeout(() => { window.location.href = '/seller-products.html'; }, 900);
+});
+
+// loadMeta must finish BEFORE loadExisting, or setting
+// categoryId.value would fail - the <option> would not exist yet.
+async function start() {
+  await loadMeta();
+  if (isEdit) await loadExisting();
+}
+start();
+</script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/seller-product-view.html?id=5
+
+     "View as customer" - what a shopper would see. Nothing here can be
+     edited. The image strip opens on the primary photo and you move
+     through the rest with the arrows or the thumbnails.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Product</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">SELLER PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/seller.html"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="/seller-products.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/seller-orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>View as customer</h2>
+      <div class="actions">
+        <a class="btn" href="/seller-products.html">&larr; Back to products</a>
+        <a class="btn primary" id="editLink" href="#">Edit this product</a>
+      </div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <div class="panel wide">
+      <div class="viewgrid">
+
+        <div class="gallery">
+          <div class="shot" id="shot"></div>
+          <div class="dots" id="dots"></div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+
+        <div class="detail" id="detail">Loading...</div>
+      </div>
+    </div>
+
+    <div class="panel wide" style="margin-top:12px;">
+      <h3>Customer reviews</h3>
+      <div id="reviews">Loading...</div>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadSellerBox();
+
+const productId = new URLSearchParams(window.location.search).get('id');
+document.getElementById('editLink').href = '/seller-product-form.html?id=' + productId;
+
+// ---------------------------------------------------------------------
+//  THE IMAGE CAROUSEL
+//
+//  Only two pieces of information are needed: the list of pictures,
+//  and which one is currently showing. Every button just changes the
+//  number and redraws.
+// ---------------------------------------------------------------------
+let images = [];
+let current = 0;
+
+function showImage() {
+  const shot = document.getElementById('shot');
+  const dots = document.getElementById('dots');
+  const thumbs = document.getElementById('thumbs');
+
+  if (images.length === 0) {
+    shot.innerHTML = '<div class="empty">No images yet.<br>Add image paths on the Edit page.</div>';
+    dots.textContent = '';
+    thumbs.innerHTML = '';
+    return;
+  }
+
+  const img = images[current];
+
+  // onerror fires when the browser cannot find the file. The database
+  // row exists, the .jpg on disk does not - so we say so plainly
+  // instead of leaving a broken-image icon.
+  let arrows = '';
+  if (images.length > 1) {
+    arrows = `<button class="arrow left"  onclick="step(-1)">&#8249;</button>
+              <button class="arrow right" onclick="step(1)">&#8250;</button>`;
+  }
+
+  shot.innerHTML = `
+    <img src="${img.ImageURL}"
+         onerror="this.parentNode.innerHTML='<div class=\\'empty\\'>File not on disk yet:<br>${img.ImageURL}</div>'">
+    ${arrows}`;
+
+  dots.textContent = `${current + 1} / ${images.length}`
+    + (img.Caption ? ' - ' + img.Caption : '')
+    + (img.IsPrimary ? ' (primary)' : '');
+
+  let t = '';
+  for (let i = 0; i < images.length; i++) {
+    t += `<div class="t ${i === current ? 'on' : ''}" onclick="goTo(${i})">
+            <img src="${images[i].ImageURL}" onerror="this.style.display='none'">
+          </div>`;
+  }
+  thumbs.innerHTML = t;
+}
+
+// The % wraps around: from the last image, next goes back to the first.
+// Adding images.length before the % keeps it positive when going left.
+function step(direction) {
+  current = (current + direction + images.length) % images.length;
+  showImage();
+}
+
+function goTo(i) { current = i; showImage(); }
+
+function stars(n) {
+  const full = Math.round(Number(n) || 0);
+  return '\u2605'.repeat(full) + '\u2606'.repeat(5 - full);
+}
+
+async function loadProduct() {
+  const res = await authFetch('/api/seller/products/' + productId);
+
+  if (!res.ok) {
+    document.getElementById('detail').innerHTML = '<p>Product not found.</p>';
+    return;
+  }
+
+  const data = await res.json();
+  const p = data.product;
+
+  images = data.images;
+  current = 0;                 // the server already sorted primary first
+  showImage();
+
+  const price = Number(p.UnitPrice);
+  const disc = Number(p.Discount);
+  const finalPrice = price * (1 - disc / 100);
+
+  const outOfStock = p.Status === 'Active' && p.StockQuantity === 0;
+
+  document.getElementById('detail').innerHTML = `
+    <h1>${p.ProductName}</h1>
+    <span class="tag ${outOfStock ? 'OutOfStock' : p.Status}">
+      ${outOfStock ? 'Out of Stock' : p.Status}</span>
+
+    <div style="margin:14px 0;">
+      <span class="price">${money(finalPrice.toFixed(2))}</span>
+      ${disc > 0 ? `<span class="strike">${money(price)}</span>
+                    <span class="off">${disc}% off</span>` : ''}
+    </div>
+
+    <div class="stars">${stars(p.AverageRating)}
+      <span class="sub">${Number(p.AverageRating).toFixed(1)} &middot; ${data.reviews.length} reviews</span>
+    </div>
+
+    <p style="margin:14px 0; color:#475569;">${p.Description ?? 'No description.'}</p>
+
+    <div class="spec">
+      <div><span>Brand</span>${p.BrandName ?? '-'}</div>
+      <div><span>Category</span>${p.CategoryName ?? '-'}</div>
+      <div><span>Warranty</span>${p.Warranty ?? '-'}</div>
+      <div><span>Weight</span>${p.Weight ? p.Weight + ' kg' : '-'}</div>
+      <div><span>In stock</span>${p.StockQuantity}</div>
+      <div><span>Product ID</span>${p.ProductID}</div>
+    </div>`;
+
+  let r = '';
+  for (const rv of data.reviews) {
+    r += `<div class="review">
+      <div class="stars">${stars(rv.Rating)}
+        <b style="color:#1e293b;margin-left:6px;">${rv.FullName}</b>
+        <span class="sub">${shortDate(rv.ReviewDate)}</span></div>
+      <div>${rv.ReviewText ?? ''}</div>
+      <div class="sub">${rv.HelpfulVotes} found this helpful</div>
+    </div>`;
+  }
+  document.getElementById('reviews').innerHTML = r || '<p class="sub">No reviews yet.</p>';
+}
+
+loadProduct();
+</script>
+</body>
+</html>

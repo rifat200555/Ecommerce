@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>My Account</title></head>
+<body style="font-family: sans-serif; max-width: 500px; margin: 60px auto;">
+
+  <h2>My Account</h2>
+  <div id="info">Loading...</div>
+  <button id="logoutBtn" style="margin-top:20px; padding:8px 16px;">Logout</button>
+
+  <hr style="margin-top:30px;">
+  <p style="color:#888;">Cart, orders and wishlist: coming soon</p>
+
+<script>
+const token = localStorage.getItem('token');
+if (!token) window.location.href = '/login.html';
+
+async function loadCustomer() {
+  const res = await fetch('/api/customer/me', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+
+  if (!res.ok) {                    // 401 = bad token, 403 = not a customer
+    localStorage.removeItem('token');
+    window.location.href = '/login.html';
+    return;
+  }
+
+  const data = await res.json();
+  const c = data.customer;
+
+  document.getElementById('info').innerHTML = `
+    <h3>Welcome, ${c.FullName}</h3>
+    <p>User ID: ${c.UserID}</p>
+    <p>Email: ${c.Email}</p>
+    <p>Phone: ${c.Phone ?? '-'}</p>
+    <p>Gender: ${c.Gender ?? '-'}</p>
+  `;
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('token');
+  window.location.href = '/login.html';
+});
+
+loadCustomer();
+</script>
+</body>
+</html>

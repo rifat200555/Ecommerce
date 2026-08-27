@@ -1,0 +1,6 @@
+    console.log('  seller   seller@gmail.com   / 123456   (Hasan Electronics)');
+    console.log('  seller   seller2@gmail.com  / 123456   (Nusrat Fashion)');
+    console.log('  admin    admin@gmail.com    / 123456');
+    console.log('  customer rafiq@gmail.com    / 123456');
+    console.log('  customer sadia@gmail.com    / 123456');
+    console.log('  customer tanvir@gmail.com   / 123456');
