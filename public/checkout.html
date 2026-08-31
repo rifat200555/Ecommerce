@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/checkout.html
+
+     Final validation and all order writes happen on the server inside one
+     database transaction. Values shown here are estimates until placement.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/checkout.html" class="active"><span class="ico">&#10003;</span><span class="hide-when-closed">Checkout</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>Checkout</h2>
+      <a class="btn" href="/cart.html">&larr; Back to cart</a>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="checkout" class="store-state">Loading checkout...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let cart = null;
+let addresses = [];
+let options = null;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function drawCheckout() {
+  const out = document.getElementById('checkout');
+  if (cart.items.length === 0) {
+    out.className = 'store-state';
+    out.innerHTML = `Your cart is empty.<br><br><a class="btn primary" href="/products.html">Continue shopping</a>`;
+    return;
+  }
+  if (cart.summary.hasUnavailable) {
+    out.className = 'store-state';
+    out.innerHTML = `Your cart contains unavailable or insufficient-stock products.<br><br><a class="btn primary" href="/cart.html">Review cart</a>`;
+    return;
+  }
+
+  let itemRows = '';
+  for (const item of cart.items) {
+    itemRows += `<div class="checkout-item">
+      <span>${escapeHtml(item.ProductName)} <span class="sub">x${item.Quantity}</span></span>
+      <span>${money(item.LineSubtotal)}</span>
+    </div>`;
+  }
+
+  let addressRows = '';
+  for (const address of addresses) {
+    const place = [address.StreetAddress, address.City, address.District,
+      address.PostalCode, address.Country].filter(Boolean).map(escapeHtml).join(', ');
+    addressRows += `<label class="choice">
+      <input type="radio" name="address" value="${address.AddressID}" ${address.IsDefault ? 'checked' : ''}>
+      <b>${escapeHtml(address.AddressLabel || 'Address')}</b> - ${escapeHtml(address.ReceiverName)}
+      <div class="sub" style="margin:5px 0 0 22px;">${place}<br>${escapeHtml(address.PhoneNumber)}</div>
+    </label>`;
+  }
+
+  const grandTotal = Number(cart.summary.total) + Number(options.deliveryCharge);
+  let paymentRows = '';
+  let walletMethod = null;
+  for (const method of options.paymentMethods) {
+    const wallet = method.MethodName.toLowerCase() === 'wallet';
+    if (wallet) walletMethod = method;
+    paymentRows += `<label class="choice">
+      <input type="radio" name="payment" value="${method.PaymentMethodID}">
+      <b>${escapeHtml(method.MethodName)}</b>
+      <div class="sub" style="margin:4px 0 0 22px;">${escapeHtml(method.Description ?? '')}
+        ${wallet ? `<br>Balance: ${options.wallet ? money(options.wallet.CurrentBalance) : 'No wallet'}` : ''}</div>
+    </label>`;
+  }
+
+  const rewardPoints = Number(options.wallet?.RewardPoints || 0);
+  if (rewardPoints > 0 && walletMethod) {
+    const wholeTotal = Number.isInteger(grandTotal);
+    const enoughPoints = rewardPoints >= grandTotal;
+    const rewardDisabled = !wholeTotal || !enoughPoints;
+    const rewardMessage = !wholeTotal
+      ? 'Unavailable because this order total is not a whole taka amount.'
+      : enoughPoints
+        ? `${rewardPoints.toLocaleString()} points available. This will use ${grandTotal.toLocaleString()} points.`
+        : `${rewardPoints.toLocaleString()} points available; ${grandTotal.toLocaleString()} points required.`;
+    paymentRows += `<label class="choice">
+      <input type="radio" name="payment" value="${walletMethod.PaymentMethodID}"
+             data-reward="true" ${rewardDisabled ? 'disabled' : ''}>
+      <b>Pay with Reward Points</b>
+      <div class="sub" style="margin:4px 0 0 22px;">${rewardMessage}</div>
+    </label>`;
+  }
+  out.className = 'checkout-layout';
+  out.innerHTML = `
+    <div class="checkout-main">
+      <div class="panel wide"><h3>Cart items</h3><div class="checkout-items">${itemRows}</div></div>
+      <div class="panel wide">
+        <div class="pagehead"><h3>Delivery address</h3><button class="btn" onclick="toggleAddressForm()">Add new address</button></div>
+        <div class="choice-list" id="addressChoices">${addressRows || '<p class="sub">Add an address to continue.</p>'}</div>
+        <div id="newAddress" class="review-form" style="display:none;margin-top:10px;">
+          <div class="row2">
+            <div class="field"><label>Label</label><input id="addressLabel" maxlength="100"></div>
+            <div class="field"><label>Receiver name *</label><input id="receiverName" maxlength="100"></div>
+          </div>
+          <div class="field"><label>Phone *</label><input id="phoneNumber" maxlength="20"></div>
+          <div class="field"><label>Street address *</label><textarea id="streetAddress" maxlength="255"></textarea></div>
+          <div class="row2">
+            <div class="field"><label>City *</label><input id="city" maxlength="50"></div>
+            <div class="field"><label>District *</label><input id="district" maxlength="50"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Postal code</label><input id="postalCode" maxlength="50"></div>
+            <div class="field"><label>Country</label><input id="country" maxlength="50"></div>
+          </div>
+          <button class="btn primary" id="addressBtn" onclick="addAddress()">Save address</button>
+        </div>
+      </div>
+      <div class="panel wide"><h3>Payment method</h3><div class="choice-list">${paymentRows || '<p class="sub">No payment methods are available.</p>'}</div></div>
+    </div>
+    <div class="panel checkout-side">
+      <h3>Order summary</h3>
+      <div class="summary-row"><span>Subtotal</span><span>${money(cart.summary.subtotal)}</span></div>
+      <div class="summary-row"><span>Discount</span><span>- ${money(cart.summary.discount)}</span></div>
+      <div class="summary-row"><span>Delivery</span><span>${money(options.deliveryCharge)}</span></div>
+      <div class="summary-row total"><span>Grand total</span><span>${money(grandTotal)}</span></div>
+      <button class="btn primary big" id="orderBtn" onclick="placeOrder()">Place order</button>
+    </div>`;
+}
+
+async function loadCheckout() {
+  const out = document.getElementById('checkout');
+  out.className = 'store-state';
+  out.textContent = 'Loading checkout...';
+
+  try {
+    const responses = await Promise.all([
+      authFetch('/api/customer/cart'),
+      authFetch('/api/customer/addresses'),
+      authFetch('/api/customer/checkout/options')
+    ]);
+    const data = await Promise.all(responses.map(res => res.json()));
+    const failed = responses.findIndex(res => !res.ok);
+    if (failed !== -1) {
+      out.textContent = data[failed].message || 'Could not load checkout.';
+      return;
+    }
+
+    cart = data[0];
+    addresses = data[1].addresses;
+    options = data[2];
+    drawCheckout();
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+function toggleAddressForm() {
+  const form = document.getElementById('newAddress');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function addAddress() {
+  const value = (id) => document.getElementById(id).value.trim();
+  const body = {
+    addressLabel: value('addressLabel'), receiverName: value('receiverName'),
+    phoneNumber: value('phoneNumber'), streetAddress: value('streetAddress'),
+    city: value('city'), district: value('district'),
+    postalCode: value('postalCode'), country: value('country')
+  };
+  if (!body.receiverName || !body.phoneNumber || !body.streetAddress || !body.city || !body.district) {
+    toast('Receiver name, phone, street address, city and district are required', true);
+    return;
+  }
+
+  const btn = document.getElementById('addressBtn');
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/addresses', { method: 'POST', body });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) {
+      await loadCheckout();
+      const added = document.querySelector(`input[name="address"][value="${data.addressId}"]`);
+      if (added) added.checked = true;
+    } else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+async function placeOrder() {
+  const address = document.querySelector('input[name="address"]:checked');
+  const payment = document.querySelector('input[name="payment"]:checked');
+  if (!address) { toast('Select a delivery address', true); return; }
+  if (!payment) { toast('Select a payment method', true); return; }
+
+  const btn = document.getElementById('orderBtn');
+  btn.disabled = true;
+  btn.textContent = 'Placing order...';
+  try {
+    const body = {
+      addressId: Number(address.value),
+      paymentMethodId: Number(payment.value)
+    };
+    if (payment.dataset.reward === 'true') body.useRewardPoints = true;
+
+    const res = await authFetch('/api/customer/checkout', {
+      method: 'POST',
+      body
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.message, true);
+      btn.disabled = false;
+      btn.textContent = 'Place order';
+      return;
+    }
+
+    const out = document.getElementById('checkout');
+    out.className = 'panel wide confirmation';
+    out.innerHTML = `<h2>Order confirmed</h2>
+      <p style="margin:10px 0;">${escapeHtml(data.message)}</p>
+      <p>Total: ${money(data.totalAmount)} &middot; Payment: ${escapeHtml(data.paymentStatus)}</p>
+      <p class="sub" style="margin-top:10px;">Opening order details...</p>`;
+    setTimeout(() => {
+      window.location.href = '/order-details.html?id=' + data.orderId;
+    }, 1200);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Place order';
+    toast('Could not reach the server', true);
+  }
+}
+
+loadCheckout();
+</script>
+</body>
+</html>

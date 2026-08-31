@@ -26,7 +26,6 @@
       <a href="/seller.html"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
       <a href="/seller-products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
       <a href="/seller-orders.html" class="active"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
-      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
       <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
     </nav>
   </aside>
@@ -96,7 +95,9 @@ async function loadOrders() {
     // the tag on its own, with no buttons at all.
     let cell = `<span class="tag ${o.OrderStatus}">${o.OrderStatus}</span>`;
 
-    if (allowed.length > 0) {
+    if (o.IsMultiSeller) {
+      cell += '<div class="sub" style="margin-top:5px;">Multi-seller order: actions unavailable</div>';
+    } else if (allowed.length > 0) {
       let buttons = '';
       for (const next of allowed) {
         const cls = next === 'Cancelled' ? 'danger' : 'good';

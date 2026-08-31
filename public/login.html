@@ -2,52 +2,53 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Seller Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ecommerce Login</title>
+  <link rel="stylesheet" href="/seller.css">
 </head>
-<body style="font-family: sans-serif; max-width: 320px; margin: 80px auto;">
-
-  <h2>Seller Login</h2>
-
-  <input id="email" type="email" placeholder="Email" style="width:100%; padding:8px; margin:6px 0;">
-  <input id="password" type="password" placeholder="Password" style="width:100%; padding:8px; margin:6px 0;">
-  <button id="loginBtn" style="width:100%; padding:10px;">Login</button>
-
-  <p id="message" style="color: red;"></p>
-  <p style="margin-top:20px;">
-    Don't have an account?
-    <a href="/register_seller.html">Create a seller account</a>
-    &nbsp;|&nbsp;
-    <a href="/register_customer.html">Register as a Customer</a>
-  </p>
-  
+<body>
+<main class="auth-page">
+  <form class="auth-card" id="loginForm">
+    <div class="auth-brand">Ecommerce</div>
+    <h1>Welcome back</h1>
+    <p class="auth-intro">Log in to continue to your account.</p>
+    <div id="message" class="auth-message"></div>
+    <div class="field"><label for="email">Email</label><input id="email" type="email" required></div>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" required></div>
+    <button class="btn primary big" id="loginBtn" type="submit">Login</button>
+    <div class="auth-links">
+      <a href="/register_customer.html">Register as customer</a>
+      <a href="/register_seller.html">Register as seller</a>
+    </div>
+  </form>
+</main>
 <script>
-document.getElementById('loginBtn').addEventListener('click', async () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
+document.getElementById('loginForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
   const message = document.getElementById('message');
   message.textContent = '';
+  message.className = 'auth-message';
 
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      })
     });
-
     const data = await res.json();
-
     if (!res.ok) {
       message.textContent = data.message;
+      message.className = 'auth-message bad';
       return;
     }
-
-    // store the token so seller.html can use it
     localStorage.setItem('token', data.token);
-    ///window.location.href = '/seller.html';
     window.location.href = data.redirect;
-
   } catch (err) {
     message.textContent = 'Could not reach the server';
+    message.className = 'auth-message bad';
   }
 });
 </script>

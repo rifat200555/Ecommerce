@@ -1,61 +1,57 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Create Customer Account</title></head>
-<body style="font-family: sans-serif; max-width: 380px; margin: 50px auto;">
-
-  <h2>Create a Customer Account</h2>
-
-  <input id="fullName" placeholder="Full name *" style="width:100%; padding:8px; margin:5px 0;">
-  <input id="email" type="email" placeholder="Email *" style="width:100%; padding:8px; margin:5px 0;">
-  <input id="password" type="password" placeholder="Password (min 6) *" style="width:100%; padding:8px; margin:5px 0;">
-  <input id="phone" placeholder="Phone" style="width:100%; padding:8px; margin:5px 0;">
-  <input id="gender" placeholder="Gender" style="width:100%; padding:8px; margin:5px 0;">
-  <input id="dateOfBirth" type="date" style="width:100%; padding:8px; margin:5px 0;">
-
-  <button id="registerBtn" style="width:100%; padding:10px; margin-top:10px;">Create Account</button>
-
-  <p id="message"></p>
-  <p><a href="/login.html">Already have an account? Log in</a></p>
-
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create Customer Account</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+<main class="auth-page">
+  <form class="auth-card" id="registerForm">
+    <div class="auth-brand">Ecommerce</div>
+    <h1>Customer registration</h1>
+    <p class="auth-intro">Use an existing account email and password to add customer access.</p>
+    <div id="message" class="auth-message"></div>
+    <div class="field"><label for="fullName">Full name *</label><input id="fullName" required></div>
+    <div class="field"><label for="email">Email *</label><input id="email" type="email" required></div>
+    <div class="field"><label for="password">Password (minimum 6 characters) *</label><input id="password" type="password" minlength="6" required></div>
+    <div class="field"><label for="phone">Phone</label><input id="phone"></div>
+    <div class="row2">
+      <div class="field"><label for="gender">Gender</label><input id="gender"></div>
+      <div class="field"><label for="dateOfBirth">Date of birth</label><input id="dateOfBirth" type="date"></div>
+    </div>
+    <button class="btn primary big" id="registerBtn" type="submit">Create customer account</button>
+    <div class="auth-links"><a href="/login.html">Already have an account? Log in</a></div>
+  </form>
+</main>
 <script>
 const val = (id) => document.getElementById(id).value.trim();
-
-document.getElementById('registerBtn').addEventListener('click', async () => {
+document.getElementById('registerForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
   const message = document.getElementById('message');
   message.textContent = '';
-  message.style.color = 'red';
-
+  message.className = 'auth-message';
   const body = {
-    fullName:    val('fullName'),
-    email:       val('email'),
-    password:    val('password'),
-    phone:       val('phone'),
-    gender:      val('gender'),
-    dateOfBirth: val('dateOfBirth')
+    fullName: val('fullName'), email: val('email'), password: val('password'),
+    phone: val('phone'), gender: val('gender'), dateOfBirth: val('dateOfBirth')
   };
-
   try {
     const res = await fetch('/api/auth/register_customer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-
     const data = await res.json();
-
     if (!res.ok) {
       message.textContent = data.message;
+      message.className = 'auth-message bad';
       return;
     }
-
-    // message.style.color = 'green';
-    // message.textContent = data.message + ' Redirecting...';
-    // setTimeout(() => { window.location.href = '/login.html'; }, 1500);
     localStorage.setItem('token', data.token);
     window.location.href = data.redirect;
-
   } catch (err) {
     message.textContent = 'Could not reach the server';
+    message.className = 'auth-message bad';
   }
 });
 </script>

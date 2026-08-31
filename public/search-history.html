@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/search-history.html
+
+     Customer-owned product search history.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Search History</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html" class="active"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>Search History</h2>
+      <button class="btn danger" id="clearBtn" type="button" disabled>Clear all history</button>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="history" class="store-state">Loading search history...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let historyEntries = [];
+
+function fullDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function drawHistory() {
+  const out = document.getElementById('history');
+  const clearBtn = document.getElementById('clearBtn');
+  clearBtn.disabled = historyEntries.length === 0;
+
+  if (historyEntries.length === 0) {
+    out.className = 'store-state';
+    out.textContent = 'No previous product searches found.';
+    return;
+  }
+
+  let rows = '';
+  for (const entry of historyEntries) {
+    const searchUrl = '/products.html?search=' + encodeURIComponent(entry.SearchKeyword);
+    rows += `<tr>
+      <td>${escapeHtml(entry.SearchKeyword)}</td>
+      <td>${fullDate(entry.SearchTime)}</td>
+      <td>${entry.TotalResult}</td>
+      <td>
+        <div class="actions">
+          <a class="btn primary" href="${searchUrl}">Search again</a>
+          <button class="btn danger" onclick="deleteEntry(${entry.SearchID}, this)">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  out.className = 'panel wide';
+  out.style.overflowX = 'auto';
+  out.innerHTML = `<table>
+    <thead><tr><th>Keyword</th><th>Search time</th><th>Results</th><th>Actions</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function loadHistory() {
+  const out = document.getElementById('history');
+  out.className = 'store-state';
+  out.textContent = 'Loading search history...';
+
+  try {
+    const res = await authFetch('/api/customer/search-history');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'Could not load search history');
+    historyEntries = data.history;
+    drawHistory();
+  } catch (err) {
+    out.textContent = err.message;
+    toast(err.message, true);
+  }
+}
+
+async function deleteEntry(searchId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/search-history/' + searchId, {
+      method: 'DELETE'
+    });
+    const data = await res.json().catch(() => ({}));
+    toast(data.message || (res.ok ? 'Deleted.' : 'Could not delete entry'), !res.ok);
+    if (res.ok) await loadHistory();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+document.getElementById('clearBtn').addEventListener('click', async function () {
+  if (!confirm('Clear all search history?')) return;
+  this.disabled = true;
+
+  try {
+    const res = await authFetch('/api/customer/search-history', { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    toast(data.message || (res.ok ? 'Search history cleared.' : 'Could not clear history'), !res.ok);
+    if (res.ok) await loadHistory();
+    else this.disabled = false;
+  } catch (err) {
+    this.disabled = false;
+    toast('Could not reach the server', true);
+  }
+});
+
+loadHistory();
+</script>
+</body>
+</html>

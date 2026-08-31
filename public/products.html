@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/products.html
+
+     Customer storefront. Only active products appear here. Search,
+     filters and sorting are sent to the server so the database remains
+     the one place that decides which products match.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>Products</h2>
+      <span class="sub" id="resultCount"></span>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <form class="filters" id="filters">
+      <div class="field search-field">
+        <label for="search">Search</label>
+        <input id="search" placeholder="Product name or keyword">
+      </div>
+      <div class="field">
+        <label for="categoryId">Category</label>
+        <select id="categoryId"><option value="">All categories</option></select>
+      </div>
+      <div class="field">
+        <label for="brandId">Brand</label>
+        <select id="brandId"><option value="">All brands</option></select>
+      </div>
+      <div class="field">
+        <label for="minPrice">Minimum price</label>
+        <input id="minPrice" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div class="field">
+        <label for="maxPrice">Maximum price</label>
+        <input id="maxPrice" type="number" min="0" step="0.01" placeholder="Any">
+      </div>
+      <div class="field">
+        <label for="sort">Sort</label>
+        <select id="sort">
+          <option value="newest">Newest</option>
+          <option value="price_asc">Price: low to high</option>
+          <option value="price_desc">Price: high to low</option>
+          <option value="rating">Highest rated</option>
+          <option value="name">Name</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn primary" type="submit">Apply</button>
+        <button class="btn" type="button" id="clearBtn">Clear</button>
+      </div>
+    </form>
+
+    <div id="products" class="store-state">Loading products...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let products = [];
+let metaLoaded = false;
+document.getElementById('search').value =
+  new URLSearchParams(window.location.search).get('search') || '';
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function stars(n) {
+  const full = Math.round(Number(n) || 0);
+  return '\u2605'.repeat(full) + '\u2606'.repeat(5 - full);
+}
+
+function drawFilters(categories, brands) {
+  if (metaLoaded) return;
+
+  const category = document.getElementById('categoryId');
+  for (const c of categories) {
+    category.innerHTML += `<option value="${c.CategoryID}">${escapeHtml(c.CategoryName)}</option>`;
+  }
+
+  const brand = document.getElementById('brandId');
+  for (const b of brands) {
+    brand.innerHTML += `<option value="${b.BrandID}">${escapeHtml(b.BrandName)}</option>`;
+  }
+
+  metaLoaded = true;
+}
+
+function drawProducts() {
+  const out = document.getElementById('products');
+  document.getElementById('resultCount').textContent =
+    products.length + (products.length === 1 ? ' product' : ' products');
+
+  if (products.length === 0) {
+    out.className = 'store-state';
+    out.textContent = 'No products match these filters.';
+    return;
+  }
+
+  let cards = '';
+  for (const p of products) {
+    const price = Number(p.UnitPrice);
+    const discount = Number(p.Discount);
+    const finalPrice = price * (1 - discount / 100);
+    const inStock = Number(p.StockQuantity) > 0;
+    const detailUrl = '/product-details.html?id=' + p.ProductID;
+    const image = p.ImageURL
+      ? `<img src="${escapeHtml(p.ImageURL)}" alt="${escapeHtml(p.ProductName)}"
+              onerror="this.parentNode.textContent='Image unavailable'">`
+      : 'No image';
+
+    cards += `<article class="product-card">
+      <a class="product-picture" href="${detailUrl}">${image}</a>
+      <div class="product-info">
+        <a class="product-name" href="${detailUrl}">${escapeHtml(p.ProductName)}</a>
+        <div class="product-meta">${escapeHtml(p.CategoryName ?? 'Uncategorized')} &middot; ${escapeHtml(p.BrandName ?? 'No brand')}</div>
+        <div>
+          <span class="product-price">${money(finalPrice.toFixed(2))}</span>
+          ${discount > 0 ? `<span class="strike">${money(price)}</span>
+                           <span class="off">${discount}% off</span>` : ''}
+        </div>
+        <div class="stars">${stars(p.AverageRating)}
+          <span class="sub">${Number(p.AverageRating).toFixed(1)}</span>
+        </div>
+        <div><span class="tag ${inStock ? 'Active' : 'OutOfStock'}">${inStock ? p.StockQuantity + ' in stock' : 'Out of stock'}</span></div>
+        <div class="actions">
+          <button class="btn primary" ${inStock ? '' : 'disabled'} onclick="addToCart(${p.ProductID}, this)">Add to cart</button>
+          <button class="btn ${p.IsWishlisted ? 'danger' : ''}" onclick="toggleWishlist(${p.ProductID}, this)">${p.IsWishlisted ? 'Remove wish' : 'Wishlist'}</button>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  out.className = 'product-grid';
+  out.innerHTML = cards;
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  const fields = ['search', 'categoryId', 'brandId', 'minPrice', 'maxPrice', 'sort'];
+  for (const id of fields) {
+    const value = document.getElementById(id).value.trim();
+    if (value && !(id === 'sort' && value === 'newest')) params.set(id, value);
+  }
+  return params.toString();
+}
+
+async function loadProducts() {
+  const out = document.getElementById('products');
+  out.className = 'store-state';
+  out.textContent = 'Loading products...';
+  document.getElementById('resultCount').textContent = '';
+
+  try {
+    const query = buildQuery();
+    const res = await authFetch('/api/customer/products' + (query ? '?' + query : ''));
+    const data = await res.json();
+
+    if (!res.ok) {
+      out.textContent = data.message || 'Could not load products.';
+      return;
+    }
+
+    products = data.products;
+    drawFilters(data.categories, data.brands);
+    drawProducts();
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+async function addToCart(productId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/cart', {
+      method: 'POST',
+      body: { productId }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+  } catch (err) {
+    toast('Could not reach the server', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function toggleWishlist(productId, btn) {
+  const product = products.find(p => p.ProductID === productId);
+  if (!product) return;
+
+  btn.disabled = true;
+  try {
+    const wished = !Boolean(product.IsWishlisted);
+    const res = await authFetch('/api/customer/wishlist/' + productId, {
+      method: 'PATCH',
+      body: { wished }
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast(data.message, true);
+      btn.disabled = false;
+      return;
+    }
+
+    product.IsWishlisted = data.wished ? 1 : 0;
+    toast(data.message, false);
+    drawProducts();
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+document.getElementById('filters').addEventListener('submit', (e) => {
+  e.preventDefault();
+  loadProducts();
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('filters').reset();
+  loadProducts();
+});
+
+loadProducts();
+</script>
+</body>
+</html>

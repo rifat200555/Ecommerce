@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/addresses.html
+
+     Customer-owned delivery addresses. The same form handles both add and
+     edit; ownership is enforced again by every server query.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Addresses</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html" class="active"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead"><h2>My Addresses</h2></div>
+    <div id="toast" class="toast"></div>
+
+    <div class="address-layout">
+      <div class="address-list">
+        <div id="addresses" class="store-state">Loading addresses...</div>
+      </div>
+
+      <div class="address-form-wrap">
+        <div class="form" style="max-width:none;">
+          <div class="pagehead">
+            <h2 id="formTitle">Add address</h2>
+            <button class="btn" id="cancelBtn" type="button" style="display:none;">Cancel edit</button>
+          </div>
+
+          <div class="row2">
+            <div class="field"><label for="addressLabel">Address label</label><input id="addressLabel" maxlength="100" placeholder="Home, Office"></div>
+            <div class="field"><label for="receiverName">Receiver name *</label><input id="receiverName" maxlength="100"></div>
+          </div>
+          <div class="field"><label for="phoneNumber">Phone *</label><input id="phoneNumber" maxlength="20"></div>
+          <div class="field"><label for="streetAddress">Street address *</label><textarea id="streetAddress" maxlength="255"></textarea></div>
+          <div class="row2">
+            <div class="field"><label for="city">City *</label><input id="city" maxlength="50"></div>
+            <div class="field"><label for="district">District *</label><input id="district" maxlength="50"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label for="postalCode">Postal code</label><input id="postalCode" maxlength="50"></div>
+            <div class="field"><label for="country">Country</label><input id="country" maxlength="50"></div>
+          </div>
+          <button class="btn primary big" id="saveBtn" type="button">Save address</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let addresses = [];
+let editingId = null;
+const val = (id) => document.getElementById(id).value.trim();
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function drawAddresses() {
+  const out = document.getElementById('addresses');
+  if (addresses.length === 0) {
+    out.className = 'store-state';
+    out.textContent = 'You have not added an address yet.';
+    return;
+  }
+
+  let cards = '';
+  for (const address of addresses) {
+    const place = [address.StreetAddress, address.City, address.District,
+      address.PostalCode, address.Country].filter(Boolean).map(escapeHtml).join(', ');
+
+    cards += `<article class="address-card ${address.IsDefault ? 'default' : ''}">
+      <div><b>${escapeHtml(address.AddressLabel || 'Address')}</b>
+        ${address.IsDefault ? '<span class="tag Active" style="margin-left:6px;">Default</span>' : ''}</div>
+      <div>${escapeHtml(address.ReceiverName)}</div>
+      <div class="sub">${escapeHtml(address.PhoneNumber)}</div>
+      <div>${place}</div>
+      <div class="actions">
+        <button class="btn" onclick="editAddress(${address.AddressID})">Edit</button>
+        ${address.IsDefault ? '' : `<button class="btn good" onclick="setDefault(${address.AddressID}, this)">Set default</button>`}
+        <button class="btn danger" onclick="deleteAddress(${address.AddressID}, this)">Delete</button>
+      </div>
+    </article>`;
+  }
+
+  out.className = 'address-grid';
+  out.innerHTML = cards;
+}
+
+async function loadAddresses() {
+  const out = document.getElementById('addresses');
+  out.className = 'store-state';
+  out.textContent = 'Loading addresses...';
+
+  try {
+    const res = await authFetch('/api/customer/addresses');
+    const data = await res.json();
+    if (!res.ok) { out.textContent = data.message || 'Could not load addresses.'; return; }
+    addresses = data.addresses;
+    drawAddresses();
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+function clearForm() {
+  editingId = null;
+  for (const id of ['addressLabel', 'receiverName', 'phoneNumber', 'streetAddress',
+                    'city', 'district', 'postalCode', 'country']) {
+    document.getElementById(id).value = '';
+  }
+  document.getElementById('formTitle').textContent = 'Add address';
+  document.getElementById('saveBtn').textContent = 'Save address';
+  document.getElementById('cancelBtn').style.display = 'none';
+}
+
+function editAddress(addressId) {
+  const address = addresses.find(a => a.AddressID === addressId);
+  if (!address) return;
+
+  editingId = addressId;
+  document.getElementById('addressLabel').value = address.AddressLabel ?? '';
+  document.getElementById('receiverName').value = address.ReceiverName;
+  document.getElementById('phoneNumber').value = address.PhoneNumber;
+  document.getElementById('streetAddress').value = address.StreetAddress;
+  document.getElementById('city').value = address.City;
+  document.getElementById('district').value = address.District;
+  document.getElementById('postalCode').value = address.PostalCode ?? '';
+  document.getElementById('country').value = address.Country ?? '';
+  document.getElementById('formTitle').textContent = 'Edit address';
+  document.getElementById('saveBtn').textContent = 'Update address';
+  document.getElementById('cancelBtn').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const body = {
+    addressLabel: val('addressLabel'), receiverName: val('receiverName'),
+    phoneNumber: val('phoneNumber'), streetAddress: val('streetAddress'),
+    city: val('city'), district: val('district'),
+    postalCode: val('postalCode'), country: val('country')
+  };
+
+  if (!body.receiverName || !body.phoneNumber || !body.streetAddress ||
+      !body.city || !body.district) {
+    toast('Receiver name, phone, street address, city and district are required', true);
+    return;
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  try {
+    const url = editingId ? '/api/customer/addresses/' + editingId : '/api/customer/addresses';
+    const method = editingId ? 'PUT' : 'POST';
+    const res = await authFetch(url, { method, body });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) { clearForm(); await loadAddresses(); }
+  } catch (err) {
+    toast('Could not reach the server', true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function setDefault(addressId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/addresses/' + addressId + '/default', {
+      method: 'PATCH'
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) await loadAddresses();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+async function deleteAddress(addressId, btn) {
+  if (!confirm('Delete this address?')) return;
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/addresses/' + addressId, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) {
+      if (editingId === addressId) clearForm();
+      await loadAddresses();
+    } else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+document.getElementById('cancelBtn').addEventListener('click', clearForm);
+loadAddresses();
+</script>
+</body>
+</html>

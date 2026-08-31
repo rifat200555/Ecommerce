@@ -23,8 +23,7 @@
     <div class="seller-box" id="sellerBox"></div>
     <nav class="nav">
       <a href="/admin.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Product Approval</span></a>
-      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Sellers</span></a>
-      <a href="#"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/register_admin.html"><span class="ico">+</span><span class="hide-when-closed">Register Admin</span></a>
       <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
     </nav>
   </aside>
@@ -32,6 +31,24 @@
   <main class="main">
     <div class="pagehead"><h2>Product Approval</h2></div>
     <div id="toast" class="toast"></div>
+
+    <div class="panel wide" style="margin-bottom:14px;">
+      <h3>Add Reward Points</h3>
+      <form id="rewardForm" class="row2" style="align-items:flex-end;">
+        <div class="field">
+          <label for="rewardCustomer">Customer</label>
+          <select id="rewardCustomer" required><option value="">Loading customers...</option></select>
+        </div>
+        <div class="field">
+          <label for="rewardPoints">Points to add</label>
+          <input id="rewardPoints" type="number" min="1" step="1" required>
+        </div>
+        <div class="field">
+          <button class="btn primary" id="rewardBtn" type="submit">Add Points</button>
+        </div>
+      </form>
+      <div class="sub" id="currentPoints"></div>
+    </div>
 
     <div class="tabs" id="tabs">
       <a href="?status=Pending">Pending</a>
@@ -64,6 +81,7 @@ loadAdminBox();
 // No ?status in the URL defaults to Pending, so simply typing
 // /admin.html lands you on the work that needs doing.
 const status = new URLSearchParams(window.location.search).get('status') || 'Pending';
+let rewardCustomers = [];
 
 for (const a of document.querySelectorAll('#tabs a')) {
   if (a.getAttribute('href') === '?status=' + status) a.classList.add('active');
@@ -114,7 +132,67 @@ async function setStatus(productId, newStatus) {
   await loadProducts();
 }
 
+async function loadRewardCustomers(selectedId) {
+  const select = document.getElementById('rewardCustomer');
+  const res = await authFetch('/api/admin/customers');
+  const data = await res.json();
+  if (!res.ok) {
+    toast(data.message || 'Could not load customers.', true);
+    return;
+  }
+
+  rewardCustomers = data.customers;
+  select.innerHTML = '<option value="">Select a customer</option>';
+  for (const customer of rewardCustomers) {
+    const option = document.createElement('option');
+    option.value = customer.CustomerID;
+    option.textContent = `${customer.FullName} (${customer.Email})`;
+    select.appendChild(option);
+  }
+  if (selectedId) select.value = String(selectedId);
+  showCurrentPoints();
+}
+
+function showCurrentPoints() {
+  const customerId = Number(document.getElementById('rewardCustomer').value);
+  const customer = rewardCustomers.find(item => item.CustomerID === customerId);
+  document.getElementById('currentPoints').textContent = customer
+    ? `Current Reward Points: ${Number(customer.RewardPoints).toLocaleString()}`
+    : '';
+}
+
+document.getElementById('rewardCustomer').addEventListener('change', showCurrentPoints);
+document.getElementById('rewardForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const customerId = Number(document.getElementById('rewardCustomer').value);
+  const points = Number(document.getElementById('rewardPoints').value);
+  if (!Number.isInteger(customerId) || customerId <= 0 ||
+      !Number.isInteger(points) || points <= 0) {
+    toast('Select a customer and enter a positive whole number of points.', true);
+    return;
+  }
+
+  const button = document.getElementById('rewardBtn');
+  button.disabled = true;
+  try {
+    const res = await authFetch(`/api/admin/customers/${customerId}/reward-points`, {
+      method: 'POST', body: { points }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) {
+      document.getElementById('rewardPoints').value = '';
+      await loadRewardCustomers(customerId);
+    }
+  } catch (err) {
+    toast('Could not reach the server.', true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 loadProducts();
+loadRewardCustomers();
 autoRefresh(loadProducts, 5);
 </script>
 </body>

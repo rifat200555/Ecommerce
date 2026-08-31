@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choose Account Role</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+<main class="auth-page">
+  <section class="auth-card">
+    <div class="auth-brand">Ecommerce</div>
+    <h1>Choose how to continue</h1>
+    <p class="auth-intro">Only roles assigned to your account are shown.</p>
+    <div id="message" class="auth-message"></div>
+    <div id="roles" class="role-list"><span class="sub">Loading roles...</span></div>
+    <div class="auth-links"><a href="/login.html" id="logoutLink">Use another account</a></div>
+  </section>
+</main>
+<script src="/panel-common.js"></script>
+<script>
+const labels = { customer: 'Continue as Customer', seller: 'Continue as Seller', admin: 'Continue as Admin' };
+
+async function loadRoles() {
+  const out = document.getElementById('roles');
+  try {
+    const res = await authFetch('/api/auth/roles');
+    const data = await res.json();
+    if (!res.ok) { out.textContent = data.message || 'Could not load roles.'; return; }
+    out.innerHTML = '';
+    for (const role of data.roles) {
+      const button = document.createElement('button');
+      button.className = 'btn primary';
+      button.textContent = labels[role];
+      button.addEventListener('click', () => chooseRole(role));
+      out.appendChild(button);
+    }
+    if (data.roles.length === 0) out.textContent = 'No role is assigned to this account.';
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+async function chooseRole(role) {
+  const message = document.getElementById('message');
+  const res = await authFetch('/api/auth/select-role', { method: 'POST', body: { role } });
+  const data = await res.json();
+  if (!res.ok) {
+    message.textContent = data.message;
+    message.className = 'auth-message bad';
+    return;
+  }
+  window.location.href = data.redirect;
+}
+
+document.getElementById('logoutLink').addEventListener('click', () => localStorage.removeItem('token'));
+loadRoles();
+</script>
+</body>
+</html>

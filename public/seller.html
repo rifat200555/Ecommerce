@@ -28,7 +28,6 @@
       <a href="/seller.html" class="active"><span class="ico">&#9632;</span><span class="hide-when-closed">Dashboard</span></a>
       <a href="/seller-products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
       <a href="/seller-orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
-      <a href="#"><span class="ico">&#9679;</span><span class="hide-when-closed">Profile</span></a>
       <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
     </nav>
   </aside>
@@ -137,6 +136,12 @@ async function loadDashboard() {
   for (const o of data.toDeliver) {
     const next = NEXT[o.OrderStatus];
     const place = [o.StreetAddress, o.City, o.District].filter(Boolean).join(', ');
+    const actions = o.IsMultiSeller
+      ? '<span class="sub">Multi-seller order: actions unavailable</span>'
+      : `<button class="btn good"
+                  onclick="moveOrder(${o.OrderID}, '${next.to}')">${next.label}</button>
+         <button class="btn danger"
+                  onclick="cancelOrder(${o.OrderID}, '${o.PaymentStatus}')">Cancel</button>`;
 
     rows += `<tr>
       <td>#${o.OrderID}<br><span class="tag ${o.OrderStatus}">${o.OrderStatus}</span></td>
@@ -146,10 +151,7 @@ async function loadDashboard() {
           <br><span class="sub">${o.PhoneNumber ?? ''}</span></td>
       <td>
         <div class="actions">
-          <button class="btn good"
-                  onclick="moveOrder(${o.OrderID}, '${next.to}')">${next.label}</button>
-          <button class="btn danger"
-                  onclick="cancelOrder(${o.OrderID}, '${o.PaymentStatus}')">Cancel</button>
+          ${actions}
         </div>
       </td>
     </tr>`;

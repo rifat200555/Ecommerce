@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register Admin</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">ADMIN PANEL</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/admin.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Product Approval</span></a>
+      <a href="/register_admin.html" class="active"><span class="ico">+</span><span class="hide-when-closed">Register Admin</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="pagehead"><h2>Register Admin</h2></div>
+    <div id="toast" class="toast"></div>
+    <form class="form" id="adminForm">
+      <p class="sub" style="margin-bottom:14px;">For an existing user, only email is required. New users also require a full name and password.</p>
+      <div class="field"><label for="email">Email *</label><input id="email" type="email" required></div>
+      <div class="field"><label for="fullName">Full name</label><input id="fullName"></div>
+      <div class="field"><label for="password">Password for a new user</label><input id="password" type="password" minlength="6"></div>
+      <div class="field"><label for="phone">Phone</label><input id="phone"></div>
+      <button class="btn primary big" type="submit">Add admin role</button>
+    </form>
+  </main>
+</div>
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadAdminBox();
+const val = (id) => document.getElementById(id).value.trim();
+
+document.getElementById('adminForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    const res = await authFetch('/api/admin/register', {
+      method: 'POST',
+      body: { email: val('email'), fullName: val('fullName'), password: val('password'), phone: val('phone') }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) event.target.reset();
+  } catch (err) {
+    toast('Could not reach the server.', true);
+  }
+});
+</script>
+</body>
+</html>

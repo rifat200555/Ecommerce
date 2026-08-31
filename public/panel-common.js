@@ -173,3 +173,20 @@ function autoRefresh(loadFunction, seconds = 5) {
     if (!document.hidden) loadFunction();
   });
 }
+
+async function loadCustomerBox() {
+  const box = document.getElementById('sellerBox');
+  if (!box) return;
+
+  const res = await authFetch('/api/customer/me');
+  if (!res.ok) { window.location.href = '/login.html'; return; }
+
+  const c = (await res.json()).customer;
+  box.innerHTML = `
+    <div class="avatar">${initials(c.FullName)}</div>
+    <div class="who hide-when-closed">
+      <div class="name">${c.FullName}</div>
+      <div class="muted">Customer ID: ${c.UserID}</div>
+      <div class="muted">${c.Email}</div>
+    </div>`;
+}

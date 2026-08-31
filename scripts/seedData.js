@@ -389,7 +389,7 @@ async function run() {
     await conn.query('SET FOREIGN_KEY_CHECKS = 0');
 
     const tables = [
-      'TRANSACTION', 'WALLET', 'REVIEW', 'ORDER_ITEM', '`ORDER`',
+      '`TRANSACTION`', 'WALLET', 'REVIEW', 'ORDER_ITEM', '`ORDER`',
       'PAYMENT_METHOD', 'SEARCH_HISTORY', 'WISHLIST_ITEM', 'CART_ITEM',
       'ADDRESS', 'PRODUCT_IMAGE', 'PRODUCT', 'BRAND', 'CATEGORY',
       'ADMIN', 'SELLER', 'CUSTOMER', '`USER`'
@@ -532,8 +532,8 @@ async function run() {
 
     // PRODUCT.AverageRating is a stored copy of something the REVIEW
     // table already knows. Recalculating it here keeps the two in step.
-    // In the real app this same UPDATE should run whenever a review is
-    // added - that is still on the to-do list.
+    // The customer review controller runs the same recalculation whenever
+    // a review is added, keeping live data in step too.
     await conn.query(`
       UPDATE PRODUCT p
       SET AverageRating = COALESCE(
@@ -572,7 +572,7 @@ async function run() {
       }
     }
 
-    await insertMany(conn, 'TRANSACTION',
+    await insertMany(conn, '`TRANSACTION`',
       ['WalletID', 'OrderID', 'TransactionType', 'Amount', 'Status', 'TransactionDate'],
       txRows);
 
@@ -657,7 +657,7 @@ async function run() {
     console.error('SEED FAILED:', err.sqlMessage || err.message);
     console.error('');
     console.error('Common causes:');
-    console.error('  - the tables do not exist yet   -> run db/schema.sql first');
+    console.error('  - the tables do not exist yet   -> run db/ecommerce_dump.sql first');
     console.error('  - wrong DB_PASSWORD in .env');
     console.error('  - the ecommerce database does not exist');
     console.error('');

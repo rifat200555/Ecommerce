@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/cart.html
+
+     The authenticated customer's cart. Prices are recalculated from the
+     current PRODUCT rows every time the cart loads.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Cart</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html" class="active"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>My Cart</h2>
+      <a class="btn" href="/products.html">Continue shopping</a>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="cart" class="store-state">Loading cart...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let cartItems = [];
+let cartSummary = null;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function unavailableMessage(item) {
+  if (item.Status !== 'Active') return 'Product is no longer available';
+  if (Number(item.StockQuantity) === 0) return 'Out of stock';
+  return `Only ${item.StockQuantity} currently available`;
+}
+
+function drawCart() {
+  const out = document.getElementById('cart');
+
+  if (cartItems.length === 0) {
+    out.className = 'store-state';
+    out.innerHTML = `Your cart is empty.<br><br>
+      <a class="btn primary" href="/products.html">Continue shopping</a>`;
+    return;
+  }
+
+  let rows = '';
+  for (const item of cartItems) {
+    const available = Boolean(item.IsAvailable);
+    const image = item.ImageURL
+      ? `<img src="${escapeHtml(item.ImageURL)}" alt="${escapeHtml(item.ProductName)}" onerror="this.parentNode.textContent='No image'">`
+      : 'No image';
+
+    rows += `<tr class="${available ? '' : 'unavailable-row'}">
+      <td>
+        <div class="cart-product">
+          <a class="cart-image" href="/product-details.html?id=${item.ProductID}">${image}</a>
+          <div>
+            <a class="product-name" href="/product-details.html?id=${item.ProductID}">${escapeHtml(item.ProductName)}</a>
+            ${available ? '' : `<div class="sub" style="color:#b45309;">${unavailableMessage(item)}</div>`}
+          </div>
+        </div>
+      </td>
+      <td>${money(item.UnitPrice)}</td>
+      <td>${Number(item.Discount) > 0 ? item.Discount + '%' : '-'}</td>
+      <td>
+        <div class="cart-quantity">
+          <button class="btn" ${Number(item.Quantity) <= 1 ? 'disabled' : ''} onclick="changeQuantity(${item.ProductID}, ${Number(item.Quantity) - 1}, this)">-</button>
+          <strong>${item.Quantity}</strong>
+          <button class="btn" ${available && Number(item.Quantity) < Number(item.StockQuantity) ? '' : 'disabled'} onclick="changeQuantity(${item.ProductID}, ${Number(item.Quantity) + 1}, this)">+</button>
+        </div>
+      </td>
+      <td>${available ? money(item.LineSubtotal) : '-'}</td>
+      <td><button class="btn danger" onclick="removeItem(${item.ProductID}, this)">Remove</button></td>
+    </tr>`;
+  }
+
+  const checkoutBlocked = cartSummary.hasUnavailable || cartItems.length === 0;
+  out.className = 'cart-layout';
+  out.innerHTML = `
+    <div class="panel cart-items">
+      <table>
+        <thead><tr><th>Product</th><th>Unit price</th><th>Discount</th><th>Quantity</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="panel cart-summary">
+      <h3>Cart summary</h3>
+      <div class="summary-row"><span>Subtotal</span><span>${money(cartSummary.subtotal)}</span></div>
+      <div class="summary-row"><span>Discount</span><span>- ${money(cartSummary.discount)}</span></div>
+      <div class="summary-row total"><span>Total</span><span>${money(cartSummary.total)}</span></div>
+      ${cartSummary.hasUnavailable ? '<p class="sub" style="color:#b45309;margin-top:8px;">Remove unavailable items before checkout.</p>' : ''}
+      <a class="btn primary big ${checkoutBlocked ? 'disabled' : ''}" ${checkoutBlocked ? '' : 'href="/checkout.html"'}>Proceed to checkout</a>
+      <a class="btn big" href="/products.html">Continue shopping</a>
+    </div>`;
+}
+
+async function loadCart() {
+  const out = document.getElementById('cart');
+  out.className = 'store-state';
+  out.textContent = 'Loading cart...';
+
+  try {
+    const res = await authFetch('/api/customer/cart');
+    const data = await res.json();
+    if (!res.ok) {
+      out.textContent = data.message || 'Could not load cart.';
+      return;
+    }
+
+    cartItems = data.items;
+    cartSummary = data.summary;
+    drawCart();
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+async function changeQuantity(productId, quantity, btn) {
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    toast('Quantity must be at least 1', true);
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/cart/' + productId, {
+      method: 'PATCH', body: { quantity }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) await loadCart();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+async function removeItem(productId, btn) {
+  if (!confirm('Remove this product from your cart?')) return;
+  btn.disabled = true;
+
+  try {
+    const res = await authFetch('/api/customer/cart/' + productId, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) await loadCart();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+loadCart();
+</script>
+</body>
+</html>

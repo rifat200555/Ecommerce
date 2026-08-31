@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/product-details.html?id=5
+
+     Customer product detail page. The server only returns active products
+     and decides whether this customer is eligible to submit a review.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product details</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>Product details</h2>
+      <a class="btn" href="/products.html">&larr; Back to products</a>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <div id="loading" class="store-state">Loading product...</div>
+
+    <div id="content" style="display:none;">
+      <div class="panel wide">
+        <div class="viewgrid">
+          <div class="gallery">
+            <div class="shot" id="shot"></div>
+            <div class="dots" id="dots"></div>
+            <div class="thumbs" id="thumbs"></div>
+          </div>
+          <div class="detail" id="detail"></div>
+        </div>
+      </div>
+
+      <div class="panel wide" style="margin-top:12px;">
+        <h3>Customer reviews</h3>
+        <div id="reviewForm"></div>
+        <div id="reviews"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+const productId = Number(new URLSearchParams(window.location.search).get('id'));
+let product = null;
+let images = [];
+let reviews = [];
+let current = 0;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function stars(n) {
+  const full = Math.round(Number(n) || 0);
+  return '\u2605'.repeat(full) + '\u2606'.repeat(5 - full);
+}
+
+function showImage() {
+  const shot = document.getElementById('shot');
+  const dots = document.getElementById('dots');
+  const thumbs = document.getElementById('thumbs');
+
+  if (images.length === 0) {
+    shot.innerHTML = '<div class="empty">No images available.</div>';
+    dots.textContent = '';
+    thumbs.innerHTML = '';
+    return;
+  }
+
+  const img = images[current];
+  const arrows = images.length > 1
+    ? `<button class="arrow left" onclick="step(-1)">&#8249;</button>
+       <button class="arrow right" onclick="step(1)">&#8250;</button>`
+    : '';
+
+  shot.innerHTML = `<img src="${escapeHtml(img.ImageURL)}" alt="Product image"
+    onerror="this.parentNode.innerHTML='<div class=\'empty\'>Image unavailable</div>'">${arrows}`;
+  dots.textContent = `${current + 1} / ${images.length}`
+    + (img.Caption ? ' - ' + img.Caption : '')
+    + (img.IsPrimary ? ' (primary)' : '');
+
+  let list = '';
+  for (let i = 0; i < images.length; i++) {
+    list += `<div class="t ${i === current ? 'on' : ''}" onclick="goTo(${i})">
+      <img src="${escapeHtml(images[i].ImageURL)}" alt="Thumbnail" onerror="this.style.display='none'">
+    </div>`;
+  }
+  thumbs.innerHTML = list;
+}
+
+function step(direction) {
+  current = (current + direction + images.length) % images.length;
+  showImage();
+}
+
+function goTo(index) {
+  current = index;
+  showImage();
+}
+
+function drawProduct() {
+  const price = Number(product.UnitPrice);
+  const discount = Number(product.Discount);
+  const finalPrice = price * (1 - discount / 100);
+  const inStock = Number(product.StockQuantity) > 0;
+
+  document.title = product.ProductName;
+  document.getElementById('detail').innerHTML = `
+    <h1>${escapeHtml(product.ProductName)}</h1>
+    <div style="margin:14px 0;">
+      <span class="price">${money(finalPrice.toFixed(2))}</span>
+      ${discount > 0 ? `<span class="strike">${money(price)}</span>
+                        <span class="off">${discount}% off</span>` : ''}
+    </div>
+    <div class="stars">${stars(product.AverageRating)}
+      <span class="sub">${Number(product.AverageRating).toFixed(1)} &middot; ${reviews.length} reviews</span>
+    </div>
+    <p style="margin:14px 0;color:#475569;">${escapeHtml(product.Description ?? 'No description.')}</p>
+    <div class="spec">
+      <div><span>Stock</span><span class="tag ${inStock ? 'Active' : 'OutOfStock'}">${inStock ? product.StockQuantity + ' available' : 'Out of stock'}</span></div>
+      <div><span>Weight</span>${product.Weight ? escapeHtml(product.Weight) + ' kg' : '-'}</div>
+      <div><span>Warranty</span>${escapeHtml(product.Warranty ?? '-')}</div>
+      <div><span>Category</span>${escapeHtml(product.CategoryName ?? '-')}</div>
+      <div><span>Brand</span>${escapeHtml(product.BrandName ?? '-')}</div>
+      <div><span>Seller</span>${escapeHtml(product.StoreName)}</div>
+      <div><span>Seller rating</span><span class="stars">${stars(product.SellerRating)}</span> ${Number(product.SellerRating).toFixed(1)}</div>
+    </div>
+    <div class="buy-box">
+      <label for="quantity">Quantity</label>
+      <input class="quantity-input" id="quantity" type="number" min="1" max="${product.StockQuantity}" value="1" ${inStock ? '' : 'disabled'}>
+      <button class="btn primary big" id="cartBtn" onclick="addToCart()" ${inStock ? '' : 'disabled'}>Add to cart</button>
+      <button class="btn big ${product.IsWishlisted ? 'danger' : ''}" id="wishBtn" onclick="toggleWishlist()">${product.IsWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}</button>
+    </div>`;
+}
+
+function drawReviews() {
+  let out = '';
+  for (const review of reviews) {
+    out += `<div class="review">
+      <div class="stars">${stars(review.Rating)}
+        <b style="color:#1e293b;margin-left:6px;">${escapeHtml(review.FullName)}</b>
+        <span class="sub">${shortDate(review.ReviewDate)}</span>
+      </div>
+      <div>${escapeHtml(review.ReviewText ?? '')}</div>
+      <div class="actions" style="margin-top:5px;align-items:center;">
+        <span class="sub" id="votes-${review.ReviewID}">${review.HelpfulVotes} found this helpful</span>
+        <button class="btn" onclick="markHelpful(${review.ReviewID}, this)">Helpful</button>
+      </div>
+    </div>`;
+  }
+  document.getElementById('reviews').innerHTML = out || '<p class="sub">No reviews yet.</p>';
+
+  document.getElementById('reviewForm').innerHTML = product.CanReview
+    ? `<div class="review-form">
+         <b>Write a review</b>
+         <div style="margin-top:8px;">
+           <label for="rating">Rating</label>
+           <select class="rating-select" id="rating">
+             <option value="5">5 - Excellent</option>
+             <option value="4">4 - Good</option>
+             <option value="3">3 - Average</option>
+             <option value="2">2 - Poor</option>
+             <option value="1">1 - Very poor</option>
+           </select>
+         </div>
+         <textarea id="reviewText" maxlength="1000" placeholder="Share your experience"></textarea>
+         <button class="btn primary" id="reviewBtn" onclick="submitReview()">Submit review</button>
+       </div>`
+    : '<p class="sub" style="margin-bottom:12px;">You can review this product after a delivered order.</p>';
+}
+
+async function loadProduct() {
+  const loading = document.getElementById('loading');
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    loading.textContent = 'Invalid product ID.';
+    return;
+  }
+
+  try {
+    const res = await authFetch('/api/customer/products/' + productId);
+    const data = await res.json();
+    if (!res.ok) {
+      loading.textContent = data.message || 'Product could not be loaded.';
+      return;
+    }
+
+    product = data.product;
+    images = data.images;
+    reviews = data.reviews;
+    current = 0;
+    loading.style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    showImage();
+    drawProduct();
+    drawReviews();
+  } catch (err) {
+    loading.textContent = 'Could not reach the server.';
+  }
+}
+
+async function addToCart() {
+  const quantity = Number(document.getElementById('quantity').value);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > Number(product.StockQuantity)) {
+    toast('Quantity must be between 1 and ' + product.StockQuantity, true);
+    return;
+  }
+
+  const btn = document.getElementById('cartBtn');
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/cart', {
+      method: 'POST', body: { productId, quantity }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+  } catch (err) {
+    toast('Could not reach the server', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function toggleWishlist() {
+  const btn = document.getElementById('wishBtn');
+  btn.disabled = true;
+  try {
+    const wished = !Boolean(product.IsWishlisted);
+    const res = await authFetch('/api/customer/wishlist/' + productId, {
+      method: 'PATCH', body: { wished }
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.message, true); btn.disabled = false; return; }
+    product.IsWishlisted = data.wished ? 1 : 0;
+    toast(data.message, false);
+    drawProduct();
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+async function submitReview() {
+  const reviewText = document.getElementById('reviewText').value.trim();
+  const rating = Number(document.getElementById('rating').value);
+  if (!reviewText) { toast('Review text is required', true); return; }
+
+  const btn = document.getElementById('reviewBtn');
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/products/' + productId + '/reviews', {
+      method: 'POST', body: { rating, reviewText }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) await loadProduct();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+async function markHelpful(reviewId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/reviews/' + reviewId + '/helpful', {
+      method: 'PATCH'
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.message, true); btn.disabled = false; return; }
+    document.getElementById('votes-' + reviewId).textContent =
+      data.helpfulVotes + ' found this helpful';
+    toast(data.message, false);
+    btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+loadProduct();
+</script>
+</body>
+</html>

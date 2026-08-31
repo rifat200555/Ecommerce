@@ -6,6 +6,164 @@
 // =====================================================================
 
 const db = require('../db/connection');
+const bcrypt = require('bcrypt');
+
+async function registerAdmin(req, res) {
+  const { fullName, email, password, phone } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [users] = await conn.query(
+      'SELECT UserID FROM `USER` WHERE Email = ? FOR UPDATE',
+      [email]
+    );
+
+    let userId;
+    if (users.length > 0) {
+      userId = users[0].UserID;
+      const [admins] = await conn.query(
+        'SELECT UserID FROM ADMIN WHERE UserID = ?', [userId]
+      );
+      if (admins.length > 0) {
+        await conn.rollback();
+        return res.status(409).json({ message: 'This account is already an admin' });
+      }
+    } else {
+      if (!fullName || !password) {
+        await conn.rollback();
+        return res.status(400).json({
+          message: 'Full name and password are required for a new account'
+        });
+      }
+      if (password.length < 6) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const [result] = await conn.query(
+        'INSERT INTO `USER` (FullName, Email, PasswordHash, Phone) VALUES (?, ?, ?, ?)',
+        [fullName, email, passwordHash, phone || null]
+      );
+      userId = result.insertId;
+    }
+
+    await conn.query('INSERT INTO ADMIN (UserID) VALUES (?)', [userId]);
+    await conn.commit();
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin role added successfully.',
+      userId
+    });
+  } catch (err) {
+    await conn.rollback();
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'That email or admin role already exists' });
+    }
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    conn.release();
+  }
+}
+
+async function getCustomers(req, res) {
+  try {
+    const [customers] = await db.query(
+      `SELECT c.UserID AS CustomerID, u.FullName, u.Email,
+              COALESCE(w.RewardPoints, 0) AS RewardPoints
+       FROM CUSTOMER c
+       JOIN \`USER\` u ON u.UserID = c.UserID
+       LEFT JOIN WALLET w ON w.CustomerID = c.UserID
+       ORDER BY u.FullName, c.UserID`
+    );
+    res.json({ success: true, customers });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function addRewardPoints(req, res) {
+  const customerId = Number(req.params.customerId);
+  const points = Number(req.body.points);
+
+  if (!Number.isInteger(customerId) || customerId <= 0) {
+    return res.status(400).json({ message: 'Invalid customer ID' });
+  }
+  if (!Number.isInteger(points) || points <= 0) {
+    return res.status(400).json({ message: 'Points must be a positive whole number' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [customers] = await conn.query(
+      'SELECT UserID FROM CUSTOMER WHERE UserID = ? FOR UPDATE',
+      [customerId]
+    );
+    if (customers.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const [wallets] = await conn.query(
+      `SELECT WalletID, RewardPoints FROM WALLET
+       WHERE CustomerID = ? FOR UPDATE`,
+      [customerId]
+    );
+
+    let walletId;
+    if (wallets.length === 0) {
+      const [walletResult] = await conn.query(
+        `INSERT INTO WALLET (CustomerID, RewardPoints, LastUpdated)
+         VALUES (?, ?, NOW())`,
+        [customerId, points]
+      );
+      walletId = walletResult.insertId;
+    } else {
+      walletId = wallets[0].WalletID;
+      await conn.query(
+        `UPDATE WALLET
+         SET RewardPoints = RewardPoints + ?, LastUpdated = NOW()
+         WHERE WalletID = ?`,
+        [points, walletId]
+      );
+    }
+
+    await conn.query(
+      "INSERT INTO `TRANSACTION` " +
+      "(WalletID, OrderID, TransactionType, Amount, Status) " +
+      "VALUES (?, NULL, 'Reward Credit', ?, 'Success')",
+      [walletId, points]
+    );
+
+    const [updated] = await conn.query(
+      'SELECT RewardPoints FROM WALLET WHERE WalletID = ?', [walletId]
+    );
+
+    await conn.commit();
+    res.json({
+      success: true,
+      message: `${points} Reward Points added successfully.`,
+      rewardPoints: updated[0].RewardPoints
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    conn.release();
+  }
+}
 
 // ---------------------------------------------------------------------
 //  GET /api/admin/me
@@ -105,4 +263,11 @@ async function updateProductStatus(req, res) {
   }
 }
 
-module.exports = { getMe, getProducts, updateProductStatus };
+module.exports = {
+  getMe,
+  getProducts,
+  updateProductStatus,
+  registerAdmin,
+  getCustomers,
+  addRewardPoints
+};

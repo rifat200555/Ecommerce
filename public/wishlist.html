@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/wishlist.html
+
+     The authenticated customer's saved products. Products remain visible
+     here if a seller takes them offline, so the customer can remove them.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Wishlist</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html" class="active"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>My Wishlist</h2>
+      <a class="btn" href="/products.html">Continue shopping</a>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="wishlist" class="store-state">Loading wishlist...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+let products = [];
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function stars(n) {
+  const full = Math.round(Number(n) || 0);
+  return '\u2605'.repeat(full) + '\u2606'.repeat(5 - full);
+}
+
+function drawWishlist() {
+  const out = document.getElementById('wishlist');
+
+  if (products.length === 0) {
+    out.className = 'store-state';
+    out.innerHTML = `Your wishlist is empty.<br><br>
+      <a class="btn primary" href="/products.html">Browse products</a>`;
+    return;
+  }
+
+  let cards = '';
+  for (const product of products) {
+    const active = product.Status === 'Active';
+    const inStock = active && Number(product.StockQuantity) > 0;
+    const price = Number(product.UnitPrice);
+    const discount = Number(product.Discount);
+    const finalPrice = price * (1 - discount / 100);
+    const image = product.ImageURL
+      ? `<img src="${escapeHtml(product.ImageURL)}" alt="${escapeHtml(product.ProductName)}" onerror="this.parentNode.textContent='Image unavailable'">`
+      : 'No image';
+
+    cards += `<article class="product-card">
+      ${active
+        ? `<a class="product-picture" href="/product-details.html?id=${product.ProductID}">${image}</a>`
+        : `<div class="product-picture">${image}</div>`}
+      <div class="product-info">
+        ${active
+          ? `<a class="product-name" href="/product-details.html?id=${product.ProductID}">${escapeHtml(product.ProductName)}</a>`
+          : `<div class="product-name">${escapeHtml(product.ProductName)}</div>`}
+        <div>
+          <span class="product-price">${money(finalPrice.toFixed(2))}</span>
+          ${discount > 0 ? `<span class="strike">${money(price)}</span>
+                           <span class="off">${discount}% off</span>` : ''}
+        </div>
+        <div class="stars">${stars(product.AverageRating)}
+          <span class="sub">${Number(product.AverageRating).toFixed(1)}</span>
+        </div>
+        <div><span class="tag ${inStock ? 'Active' : 'OutOfStock'}">${inStock ? product.StockQuantity + ' in stock' : active ? 'Out of stock' : 'Unavailable'}</span></div>
+        <div class="actions">
+          ${active ? `<a class="btn" href="/product-details.html?id=${product.ProductID}">View details</a>` : '<span class="btn disabled">Unavailable</span>'}
+          <button class="btn primary" ${inStock ? '' : 'disabled'} onclick="addToCart(${product.ProductID}, this)">Add to cart</button>
+          <button class="btn danger" onclick="removeWish(${product.ProductID}, this)">Remove</button>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  out.className = 'product-grid';
+  out.innerHTML = cards;
+}
+
+async function loadWishlist() {
+  const out = document.getElementById('wishlist');
+  out.className = 'store-state';
+  out.textContent = 'Loading wishlist...';
+
+  try {
+    const res = await authFetch('/api/customer/wishlist');
+    const data = await res.json();
+    if (!res.ok) {
+      out.textContent = data.message || 'Could not load wishlist.';
+      return;
+    }
+
+    products = data.products;
+    drawWishlist();
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+async function addToCart(productId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/cart', {
+      method: 'POST', body: { productId }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+  } catch (err) {
+    toast('Could not reach the server', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function removeWish(productId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authFetch('/api/customer/wishlist/' + productId, {
+      method: 'PATCH', body: { wished: false }
+    });
+    const data = await res.json();
+    toast(data.message, !res.ok);
+    if (res.ok) await loadWishlist();
+    else btn.disabled = false;
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not reach the server', true);
+  }
+}
+
+loadWishlist();
+</script>
+</body>
+</html>

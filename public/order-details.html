@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/order-details.html
+
+     Customer-owned order details, purchased items and transactions.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order Details</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html" class="active"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2 id="title">Order Details</h2>
+      <a class="btn" href="/orders.html">Back to orders</a>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="details" class="store-state">Loading order...</div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+const orderIdText = new URLSearchParams(window.location.search).get('id');
+const orderId = Number(orderIdText);
+
+function fullDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function addressText(order) {
+  const location = [order.StreetAddress, order.City, order.District,
+    order.PostalCode, order.Country].filter(Boolean).map(escapeHtml).join(', ');
+  if (!order.ReceiverName && !location) return 'Address unavailable';
+
+  return `${order.AddressLabel ? `<b>${escapeHtml(order.AddressLabel)}</b><br>` : ''}
+    ${escapeHtml(order.ReceiverName || '')}<br>
+    ${escapeHtml(order.PhoneNumber || '')}<br>
+    ${location}`;
+}
+
+function drawOrder(data) {
+  const order = data.order;
+  document.getElementById('title').textContent = `Order #${order.OrderID}`;
+
+  let itemRows = '';
+  for (const item of data.items) {
+    const image = item.ImageURL
+      ? `<img src="${escapeHtml(item.ImageURL)}" alt="${escapeHtml(item.ProductName)}" onerror="this.parentNode.textContent='No image'">`
+      : 'No image';
+    const review = order.OrderStatus === 'Delivered' && item.ProductStatus === 'Active'
+      ? `<a class="btn" href="/product-details.html?id=${item.ProductID}#reviewForm">Review product</a>`
+      : '';
+
+    itemRows += `<tr>
+      <td>
+        <div class="cart-product">
+          <a class="cart-image" href="/product-details.html?id=${item.ProductID}">${image}</a>
+          <div>
+            <a class="product-name" href="/product-details.html?id=${item.ProductID}">${escapeHtml(item.ProductName)}</a>
+            ${review ? `<div class="actions" style="margin-top:6px;">${review}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td>${item.Quantity}</td>
+      <td>${money(item.UnitPrice)}</td>
+      <td>${Number(item.Discount) > 0 ? Number(item.Discount) + '%' : '-'}</td>
+      <td>${money(item.SubTotal)}</td>
+    </tr>`;
+  }
+
+  let transactionRows = '';
+  for (const transaction of data.transactions) {
+    transactionRows += `<tr>
+      <td>#${transaction.TransactionID}</td>
+      <td>${escapeHtml(transaction.TransactionType)}</td>
+      <td>${money(transaction.Amount)}</td>
+      <td>${escapeHtml(transaction.Status)}</td>
+      <td>${fullDate(transaction.TransactionDate)}</td>
+    </tr>`;
+  }
+
+  const itemSubtotal = data.items.reduce(
+    (sum, item) => sum + Number(item.Quantity) * Number(item.UnitPrice), 0
+  );
+
+  const out = document.getElementById('details');
+  out.className = 'checkout-layout';
+  out.innerHTML = `
+    <div class="checkout-main">
+      <div class="panel">
+        <div class="pagehead">
+          <h3>Order information</h3>
+          <span class="tag ${escapeHtml(order.OrderStatus)}">${escapeHtml(order.OrderStatus)}</span>
+        </div>
+        <div class="spec">
+          <div><span>Order ID</span>#${order.OrderID}</div>
+          <div><span>Order date</span>${fullDate(order.OrderDate)}</div>
+          <div><span>Payment</span>${escapeHtml(order.PaymentStatus)}</div>
+          <div><span>Method</span>${escapeHtml(order.PaymentMethod || 'Unavailable')}</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Delivery address</h3>
+        <div style="font-size:13px;line-height:1.6;">${addressText(order)}</div>
+      </div>
+
+      <div class="panel wide" style="overflow-x:auto;">
+        <h3>Purchased products</h3>
+        <table>
+          <thead><tr><th>Product</th><th>Quantity</th><th>Unit price</th><th>Discount</th><th>Subtotal</th></tr></thead>
+          <tbody>${itemRows || '<tr><td colspan="5">No purchased products found.</td></tr>'}</tbody>
+        </table>
+      </div>
+
+      <div class="panel wide" style="overflow-x:auto;">
+        <h3>Transactions</h3>
+        <table>
+          <thead><tr><th>Transaction</th><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody>${transactionRows || '<tr><td colspan="5">No transaction was created for this order.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel cart-summary checkout-side">
+      <h3>Order summary</h3>
+      <div class="summary-row"><span>Subtotal</span><span>${money(itemSubtotal)}</span></div>
+      <div class="summary-row"><span>Discount</span><span>- ${money(order.DiscountAmount)}</span></div>
+      <div class="summary-row"><span>Delivery charge</span><span>${money(order.DeliveryCharge)}</span></div>
+      <div class="summary-row total"><span>Total</span><span>${money(order.TotalAmount)}</span></div>
+    </div>`;
+}
+
+async function loadOrder() {
+  const out = document.getElementById('details');
+  if (!Number.isInteger(orderId) || orderId <= 0 || String(orderId) !== orderIdText) {
+    out.textContent = 'A valid OrderID is required.';
+    toast('Invalid order ID', true);
+    return;
+  }
+
+  try {
+    const res = await authFetch('/api/customer/orders/' + orderId);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'Could not load order');
+    drawOrder(data);
+  } catch (err) {
+    out.className = 'store-state';
+    out.textContent = err.message;
+    toast(err.message, true);
+  }
+}
+
+loadOrder();
+</script>
+</body>
+</html>

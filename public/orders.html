@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     public/orders.html
+
+     Authenticated customer order history. Filtering and sorting are
+     performed by the customer-scoped API.
+     ===================================================================== -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Orders</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html" class="active"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h2>My Orders</h2>
+      <div class="field" style="margin:0; min-width:160px;">
+        <label for="sort">Sort</label>
+        <select id="sort">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <div class="tabs" id="tabs">
+      <a data-status="all">All</a>
+      <a data-status="pending">Pending</a>
+      <a data-status="processing">Processing</a>
+      <a data-status="shipped">Shipped</a>
+      <a data-status="delivered">Delivered</a>
+      <a data-status="cancelled">Cancelled</a>
+    </div>
+
+    <div class="panel wide">
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th><th>Date</th><th>Total</th><th>Payment</th>
+            <th>Status</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="body"><tr><td colspan="6">Loading orders...</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="/panel-common.js"></script>
+<script>
+setupSidebar();
+loadCustomerBox();
+
+const params = new URLSearchParams(window.location.search);
+const allowedStatuses = ['all', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+const status = allowedStatuses.includes(params.get('status')) ? params.get('status') : 'all';
+const sort = params.get('sort') === 'oldest' ? 'oldest' : 'newest';
+const sortSelect = document.getElementById('sort');
+sortSelect.value = sort;
+
+for (const link of document.querySelectorAll('#tabs a')) {
+  const linkStatus = link.dataset.status;
+  link.href = `?status=${linkStatus}&sort=${sort}`;
+  if (linkStatus === status) link.classList.add('active');
+}
+
+sortSelect.addEventListener('change', () => {
+  window.location.search = `?status=${status}&sort=${sortSelect.value}`;
+});
+
+async function loadOrders() {
+  const body = document.getElementById('body');
+  body.innerHTML = '<tr><td colspan="6">Loading orders...</td></tr>';
+
+  try {
+    const res = await authFetch(`/api/customer/orders?status=${status}&sort=${sort}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'Could not load orders');
+
+    let rows = '';
+    for (const order of data.orders) {
+      rows += `<tr>
+        <td>#${order.OrderID}</td>
+        <td>${orderDate(order.OrderDate)}</td>
+        <td>${money(order.TotalAmount)}</td>
+        <td>${order.PaymentStatus}</td>
+        <td><span class="tag ${order.OrderStatus}">${order.OrderStatus}</span></td>
+        <td><a class="btn" href="/order-details.html?id=${order.OrderID}">View details</a></td>
+      </tr>`;
+    }
+    body.innerHTML = rows || '<tr><td colspan="6">No orders found.</td></tr>';
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="6">${escapeHtml(err.message)}</td></tr>`;
+    toast(err.message, true);
+  }
+}
+
+function orderDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+loadOrders();
+</script>
+</body>
+</html>

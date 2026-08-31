@@ -2,6 +2,32 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db/connection');
 
+async function getRoles(queryable, userId) {
+  const [admins] = await queryable.query(
+    'SELECT UserID FROM ADMIN WHERE UserID = ?', [userId]
+  );
+  const [sellers] = await queryable.query(
+    'SELECT UserID FROM SELLER WHERE UserID = ?', [userId]
+  );
+  const [customers] = await queryable.query(
+    'SELECT UserID FROM CUSTOMER WHERE UserID = ?', [userId]
+  );
+
+  const roles = [];
+  if (customers.length > 0) roles.push('customer');
+  if (sellers.length > 0) roles.push('seller');
+  if (admins.length > 0) roles.push('admin');
+  return roles;
+}
+
+function redirectForRole(role) {
+  return {
+    customer: '/customer.html',
+    seller: '/seller.html',
+    admin: '/admin.html'
+  }[role];
+}
+
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -10,7 +36,6 @@ async function login(req, res) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // STEP 1 — find the USER by email
     const [users] = await db.query(
       'SELECT UserID, Email, PasswordHash, FullName FROM `USER` WHERE Email = ?',
       [email]
@@ -21,32 +46,16 @@ async function login(req, res) {
     }
     const user = users[0];
 
-    // STEP 2 — compare the typed password against the stored hash
     const passwordOk = await bcrypt.compare(password, user.PasswordHash);
     if (!passwordOk) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // STEP 3 — which specialization tables contain this UserID?
-    const [admins] = await db.query(
-      'SELECT UserID FROM ADMIN WHERE UserID = ?', [user.UserID]
-    );
-    const [sellers] = await db.query(
-      'SELECT UserID FROM SELLER WHERE UserID = ?', [user.UserID]
-    );
-    const [customers] = await db.query(
-      'SELECT UserID FROM CUSTOMER WHERE UserID = ?', [user.UserID]
-    );
-
-    const isAdmin    = admins.length > 0;
-    const isSeller   = sellers.length > 0;
-    const isCustomer = customers.length > 0;
-
-    if (!isAdmin && !isSeller && !isCustomer) {
+    const roles = await getRoles(db, user.UserID);
+    if (roles.length === 0) {
       return res.status(403).json({ message: 'This account has no type assigned' });
     }
 
-    // STEP 4 — create the JWT. Payload holds nothing but the UserID.
     const token = jwt.sign(
       { userId: user.UserID },
       process.env.JWT_SECRET,
@@ -55,89 +64,99 @@ async function login(req, res) {
 
     await db.query('UPDATE `USER` SET LastLogin = NOW() WHERE UserID = ?', [user.UserID]);
 
-    // STEP 5 — where does the browser go? admin > seller > customer
-    let redirect = '/customer.html';
-    if (isSeller) redirect = '/seller.html';
-    if (isAdmin)  redirect = '/admin.html';
+    const redirect = roles.length === 1
+      ? redirectForRole(roles[0])
+      : '/role-selection.html';
 
-    res.json({ success: true, token, fullName: user.FullName, redirect });
-
+    res.json({ success: true, token, fullName: user.FullName, roles, redirect });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 }
 
-
-
-
-
 async function register_seller(req, res) {
-  const { fullName, email, password, phone, storeName, businessEmail, businessPhone, tradeLicenseNumber } = req.body;
+  const {
+    fullName, email, password, phone, storeName,
+    businessEmail, businessPhone, tradeLicenseNumber
+  } = req.body;
 
-  // STEP 1 — basic validation
   if (!fullName || !email || !password || !storeName) {
-    return res.status(400).json({ message: 'Full name, email, password and store name are required' });
+    return res.status(400).json({
+      message: 'Full name, email, password and store name are required'
+    });
   }
   if (password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
 
-  // STEP 2 — hash the password BEFORE it ever touches the database
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  // STEP 3 — grab a single connection so we can run a transaction
   const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
 
-    const [userResult] = await conn.query(
-      'INSERT INTO `USER` (FullName, Email, PasswordHash, Phone) VALUES (?, ?, ?, ?)',
-      [fullName, email, passwordHash, phone || null]
+    const [users] = await conn.query(
+      'SELECT UserID, PasswordHash FROM `USER` WHERE Email = ? FOR UPDATE',
+      [email]
     );
 
-    const userId = userResult.insertId;
+    let userId;
+    if (users.length > 0) {
+      const passwordOk = await bcrypt.compare(password, users[0].PasswordHash);
+      if (!passwordOk) {
+        await conn.rollback();
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+
+      userId = users[0].UserID;
+      const [roles] = await conn.query(
+        'SELECT UserID FROM SELLER WHERE UserID = ?', [userId]
+      );
+      if (roles.length > 0) {
+        await conn.rollback();
+        return res.status(409).json({
+          message: 'This account is already registered as a seller'
+        });
+      }
+    } else {
+      const passwordHash = await bcrypt.hash(password, 10);
+      const [userResult] = await conn.query(
+        'INSERT INTO `USER` (FullName, Email, PasswordHash, Phone) VALUES (?, ?, ?, ?)',
+        [fullName, email, passwordHash, phone || null]
+      );
+      userId = userResult.insertId;
+    }
 
     await conn.query(
       `INSERT INTO SELLER
          (UserID, StoreName, BusinessEmail, BusinessPhone, TradeLicenseNumber, VerificationStatus)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, storeName, businessEmail || email, businessPhone || null, tradeLicenseNumber || null, 'Pending']
+      [
+        userId, storeName, businessEmail || email, businessPhone || null,
+        tradeLicenseNumber || null, 'Pending'
+      ]
     );
 
-    await conn.commit();   // both inserts succeeded -> save them for real
+    await conn.commit();
 
-    //res.status(201).json({ success: true, message: 'Account created. You can log in now.' });
-        await conn.commit();
-
-    const token = jwt.sign(
-      { userId },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
-    );
-
+    const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
     res.status(201).json({
       success: true,
-      message: 'Account created.',
+      message: 'Seller role added.',
       token,
       redirect: '/seller.html'
     });
-
   } catch (err) {
-    await conn.rollback();   // something failed -> undo BOTH inserts
-
+    await conn.rollback();
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'That email is already registered' });
+      return res.status(409).json({ message: 'That email or seller role is already registered' });
     }
     console.error(err);
     res.status(500).json({ message: 'Server error' });
-
   } finally {
-    conn.release();   // always give the connection back to the pool
+    conn.release();
   }
 }
-
 
 async function register_customer(req, res) {
   const { fullName, email, password, phone, gender, dateOfBirth } = req.body;
@@ -149,17 +168,42 @@ async function register_customer(req, res) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
   const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
 
-    const [userResult] = await conn.query(
-      'INSERT INTO `USER` (FullName, Email, PasswordHash, Phone) VALUES (?, ?, ?, ?)',
-      [fullName, email, passwordHash, phone || null]
+    const [users] = await conn.query(
+      'SELECT UserID, PasswordHash FROM `USER` WHERE Email = ? FOR UPDATE',
+      [email]
     );
-    const userId = userResult.insertId;
+
+    let userId;
+    if (users.length > 0) {
+      const passwordOk = await bcrypt.compare(password, users[0].PasswordHash);
+      if (!passwordOk) {
+        await conn.rollback();
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+
+      userId = users[0].UserID;
+      const [roles] = await conn.query(
+        'SELECT UserID FROM CUSTOMER WHERE UserID = ?', [userId]
+      );
+      if (roles.length > 0) {
+        await conn.rollback();
+        return res.status(409).json({
+          message: 'This account is already registered as a customer'
+        });
+      }
+    } else {
+      const passwordHash = await bcrypt.hash(password, 10);
+      const [userResult] = await conn.query(
+        'INSERT INTO `USER` (FullName, Email, PasswordHash, Phone) VALUES (?, ?, ?, ?)',
+        [fullName, email, passwordHash, phone || null]
+      );
+      userId = userResult.insertId;
+    }
 
     await conn.query(
       'INSERT INTO CUSTOMER (UserID, Gender, DateOfBirth) VALUES (?, ?, ?)',
@@ -167,28 +211,18 @@ async function register_customer(req, res) {
     );
 
     await conn.commit();
-   // res.status(201).json({ success: true, message: 'Account created. You can log in now.' });
-        await conn.commit();
 
-    // the account is real now, so we can hand out a token immediately
-    const token = jwt.sign(
-      { userId },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
-    );
-
+    const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
     res.status(201).json({
       success: true,
-      message: 'Account created.',
+      message: 'Customer role added.',
       token,
       redirect: '/customer.html'
     });
-
-    
   } catch (err) {
     await conn.rollback();
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'That email is already registered' });
+      return res.status(409).json({ message: 'That email or customer role is already registered' });
     }
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -197,4 +231,40 @@ async function register_customer(req, res) {
   }
 }
 
-module.exports = { login , register_customer ,register_seller };
+async function getMyRoles(req, res) {
+  try {
+    const roles = await getRoles(db, req.user.userId);
+    res.json({ success: true, roles });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function selectRole(req, res) {
+  try {
+    const { role } = req.body;
+    const redirect = redirectForRole(role);
+    if (!redirect) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const roles = await getRoles(db, req.user.userId);
+    if (!roles.includes(role)) {
+      return res.status(403).json({ message: 'That role is not assigned to this account' });
+    }
+
+    res.json({ success: true, redirect });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+module.exports = {
+  login,
+  register_customer,
+  register_seller,
+  getMyRoles,
+  selectRole
+};

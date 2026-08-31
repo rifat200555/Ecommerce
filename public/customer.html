@@ -1,47 +1,68 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>My Account</title></head>
-<body style="font-family: sans-serif; max-width: 500px; margin: 60px auto;">
-
-  <h2>My Account</h2>
-  <div id="info">Loading...</div>
-  <button id="logoutBtn" style="margin-top:20px; padding:8px 16px;">Logout</button>
-
-  <hr style="margin-top:30px;">
-  <p style="color:#888;">Cart, orders and wishlist: coming soon</p>
-
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Account</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+<div class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand hide-when-closed">CUSTOMER</div>
+      <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
+    </div>
+    <div class="seller-box" id="sellerBox"></div>
+    <nav class="nav">
+      <a href="/products.html"><span class="ico">&#9635;</span><span class="hide-when-closed">Products</span></a>
+      <a href="/cart.html"><span class="ico">&#9636;</span><span class="hide-when-closed">Cart</span></a>
+      <a href="/wishlist.html"><span class="ico">&#9825;</span><span class="hide-when-closed">Wishlist</span></a>
+      <a href="/addresses.html"><span class="ico">&#8962;</span><span class="hide-when-closed">Addresses</span></a>
+      <a href="/orders.html"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="/wallet.html"><span class="ico">&#9670;</span><span class="hide-when-closed">Wallet</span></a>
+      <a href="/search-history.html"><span class="ico">&#8981;</span><span class="hide-when-closed">Search History</span></a>
+      <a href="/customer.html" class="active"><span class="ico">&#9679;</span><span class="hide-when-closed">My Account</span></a>
+      <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="pagehead"><h2>My Account</h2></div>
+    <div id="account" class="panel">Loading account...</div>
+  </main>
+</div>
+<script src="/panel-common.js"></script>
 <script>
-const token = localStorage.getItem('token');
-if (!token) window.location.href = '/login.html';
+setupSidebar();
+loadCustomerBox();
 
-async function loadCustomer() {
-  const res = await fetch('/api/customer/me', {
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-
-  if (!res.ok) {                    // 401 = bad token, 403 = not a customer
-    localStorage.removeItem('token');
-    window.location.href = '/login.html';
-    return;
-  }
-
-  const data = await res.json();
-  const c = data.customer;
-
-  document.getElementById('info').innerHTML = `
-    <h3>Welcome, ${c.FullName}</h3>
-    <p>User ID: ${c.UserID}</p>
-    <p>Email: ${c.Email}</p>
-    <p>Phone: ${c.Phone ?? '-'}</p>
-    <p>Gender: ${c.Gender ?? '-'}</p>
-  `;
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('token');
-  window.location.href = '/login.html';
-});
-
+async function loadCustomer() {
+  const out = document.getElementById('account');
+  try {
+    const res = await authFetch('/api/customer/me');
+    const data = await res.json();
+    if (!res.ok) { out.textContent = data.message || 'Could not load account.'; return; }
+    const c = data.customer;
+    out.innerHTML = `
+      <h3>Welcome, ${escapeHtml(c.FullName)}</h3>
+      <div class="spec">
+        <div><span>User ID</span>${c.UserID}</div>
+        <div><span>Email</span>${escapeHtml(c.Email)}</div>
+        <div><span>Phone</span>${escapeHtml(c.Phone ?? '-')}</div>
+        <div><span>Gender</span>${escapeHtml(c.Gender ?? '-')}</div>
+        <div><span>Date of birth</span>${escapeHtml(c.DateOfBirth ? shortDate(c.DateOfBirth) : '-')}</div>
+      </div>`;
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
 loadCustomer();
 </script>
 </body>
