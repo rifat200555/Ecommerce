@@ -1,6 +1,7 @@
 # -------- never commit --------
 node_modules/
 .env
+documentation/
 
 # -------- editor / OS noise --------
 .vscode/
