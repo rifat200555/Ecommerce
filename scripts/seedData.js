@@ -1,8 +1,8 @@
 // =====================================================================
 //  scripts/seedData.js
 //
-//  Fills an EMPTY database with a full set of test data:
-//  11 users, 32 products, 26 orders, reviews, wallets, carts, wishlists.
+//  Fills an EMPTY database with a large, deterministic demonstration set:
+//  80 users, 300 products, 300 orders, reviews, wallets, carts, wishlists.
 //
 //  It also writes a placeholder image file for every product, so the
 //  image carousel actually shows something instead of broken links.
@@ -270,6 +270,279 @@ const SEARCHES = [
   { cust: 6,  word: 'keyboard',    results: 0, time: '2026-08-26 21:15:00' }
 ];
 
+// =====================================================================
+//  SECTION 1B - LARGE DEMONSTRATION DATA
+//
+//  The hand-written rows above keep the memorable demo accounts and
+//  scenarios. This deterministic generator expands them without using
+//  random or duplicate placeholder records, so every run creates the
+//  same related dataset and is easy to test.
+// =====================================================================
+
+function dateTime(dayOffset, hourOffset = 0) {
+  const d = new Date(Date.UTC(2026, 0, 1 + dayOffset, 8 + hourOffset, 0, 0));
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function dateOnly(dayOffset) {
+  return dateTime(dayOffset).slice(0, 10);
+}
+
+const FIRST_NAMES = [
+  'Ayaan', 'Nabila', 'Fahim', 'Ishrat', 'Samiul', 'Tahmina', 'Nafis', 'Jannat',
+  'Mehedi', 'Sumaiya', 'Zubair', 'Raisa', 'Mahin', 'Anika', 'Sabbir', 'Lamisa'
+];
+const LAST_NAMES = [
+  'Rahman', 'Ahmed', 'Khan', 'Islam', 'Chowdhury', 'Hossain', 'Akter', 'Sultana',
+  'Karim', 'Mahmud', 'Kabir', 'Hasan'
+];
+const DISTRICTS = [
+  ['Dhaka', 'Dhaka', '1207'], ['Chattogram', 'Chattogram', '4000'],
+  ['Sylhet', 'Sylhet', '3100'], ['Rajshahi', 'Rajshahi', '6000'],
+  ['Khulna', 'Khulna', '9000'], ['Cumilla', 'Cumilla', '3500'],
+  ['Rangpur', 'Rangpur', '5400'], ['Barishal', 'Barishal', '8200']
+];
+
+for (let id = 12; id <= 80; id++) {
+  const first = FIRST_NAMES[(id * 5) % FIRST_NAMES.length];
+  const last = LAST_NAMES[(id * 7) % LAST_NAMES.length];
+  USERS.push({
+    id,
+    name: `${first} ${last}`,
+    email: `demo.user${String(id).padStart(2, '0')}@example.com`,
+    phone: `017${String(20000000 + id).slice(-8)}`,
+    joined: dateOnly(15 + id * 2)
+  });
+}
+
+const EXTRA_STORES = [
+  'Tech Harbor', 'Urban Loom', 'Daily Essentials', 'Gadget Grove',
+  'Home Nest', 'Fit & Play', 'Book Corner', 'Beauty Basket', 'Little Wonders'
+];
+for (let id = 12; id <= 20; id++) {
+  SELLERS.push({
+    id,
+    store: EXTRA_STORES[id - 12],
+    email: `store${id}@example.com`,
+    phone: `018${String(30000000 + id).slice(-8)}`,
+    lic: `TL-${11000 + id}`,
+    status: id % 5 === 0 ? 'Pending' : 'Verified',
+    joined: dateOnly(20 + id * 2)
+  });
+}
+
+// Two generated accounts demonstrate overlapping customer/seller roles.
+for (const id of [12, 13]) {
+  CUSTOMERS.push({ id, gender: id % 2 ? 'Female' : 'Male', dob: `199${id % 10}-05-15` });
+}
+for (let id = 21; id <= 80; id++) {
+  CUSTOMERS.push({
+    id,
+    gender: id % 3 === 0 ? 'Female' : id % 3 === 1 ? 'Male' : null,
+    dob: `${1988 + (id % 15)}-${String(1 + (id % 12)).padStart(2, '0')}-${String(1 + (id % 27)).padStart(2, '0')}`
+  });
+}
+
+const EXTRA_CATEGORIES = [
+  'Beauty', 'Skincare', 'Sports', 'Fitness', 'Books', 'Office Supplies',
+  'Toys', 'Baby Care', 'Grocery', 'Appliances', 'Footwear', 'Watches'
+];
+EXTRA_CATEGORIES.forEach((name, index) => {
+  CATEGORIES.push({
+    id: 13 + index,
+    name,
+    desc: `${name} products for everyday shopping`,
+    parent: null
+  });
+});
+
+const EXTRA_BRANDS = [
+  'Nike', 'Adidas', 'Dell', 'Lenovo', 'Philips', 'Walton', 'Vision', 'Puma',
+  'Bata', 'Casio', 'Titan', 'Havit', 'JBL', 'Unilever', 'Nestle'
+];
+EXTRA_BRANDS.forEach((name, index) => {
+  BRANDS.push({ id: 11 + index, name });
+});
+
+const PRODUCT_BLUEPRINTS = [
+  { c: 2,  names: ['5G Smartphone', 'Camera Phone', 'Budget Smartphone'], brands: [1, 2, 3], price: 22000 },
+  { c: 3,  names: ['Business Laptop', 'Gaming Laptop', 'Student Notebook'], brands: [6, 7, 13, 14], price: 58000 },
+  { c: 4,  names: ['Wireless Earbuds', 'Bluetooth Speaker', 'Studio Headphones'], brands: [5, 23, 2], price: 4500 },
+  { c: 5,  names: ['Fast Charger', 'Wireless Mouse', 'USB-C Hub'], brands: [4, 8, 22], price: 1800 },
+  { c: 7,  names: ['Cotton Panjabi', 'Casual Shirt', 'Denim Trousers'], brands: [9, 10, 18], price: 1800 },
+  { c: 8,  names: ['Printed Saree', 'Embroidered Kurti', 'Linen Scarf'], brands: [9, 10], price: 2200 },
+  { c: 10, names: ['Cookware Set', 'Electric Kettle', 'Storage Container'], brands: [10, 15, 16], price: 1600 },
+  { c: 11, names: ['Study Desk', 'Office Chair', 'Bookshelf'], brands: [10, 16], price: 6500 },
+  { c: 12, names: ['Travel Backpack', 'Laptop Backpack', 'Canvas Tote Bag'], brands: [10, 11, 12], price: 1400 },
+  { c: 13, names: ['Matte Lipstick', 'Makeup Palette', 'Beauty Brush Set'], brands: [24, 10], price: 750 },
+  { c: 14, names: ['Face Wash', 'Moisturizing Cream', 'Sunscreen Lotion'], brands: [24, 10], price: 550 },
+  { c: 15, names: ['Cricket Bat', 'Football', 'Badminton Racket'], brands: [11, 12, 18], price: 1900 },
+  { c: 16, names: ['Yoga Mat', 'Resistance Band Set', 'Dumbbell Pair'], brands: [11, 12], price: 1200 },
+  { c: 17, names: ['Programming Handbook', 'Database Fundamentals', 'Web Development Guide'], brands: [10], price: 650 },
+  { c: 18, names: ['Notebook Set', 'Desk Organizer', 'Scientific Calculator'], brands: [10, 20], price: 450 },
+  { c: 19, names: ['Building Blocks', 'Remote Control Car', 'Educational Puzzle'], brands: [10], price: 900 },
+  { c: 20, names: ['Baby Lotion', 'Feeding Bottle Set', 'Soft Baby Towel'], brands: [24, 10], price: 500 },
+  { c: 21, names: ['Premium Tea', 'Breakfast Cereal', 'Organic Honey'], brands: [25, 10], price: 420 },
+  { c: 22, names: ['Rice Cooker', 'Table Fan', 'Blender Machine'], brands: [15, 16, 17], price: 3200 },
+  { c: 23, names: ['Running Shoes', 'Leather Sandals', 'Casual Sneakers'], brands: [11, 12, 18, 19], price: 2800 },
+  { c: 24, names: ['Classic Wristwatch', 'Sports Watch', 'Smart Fitness Watch'], brands: [20, 21, 3], price: 3500 }
+];
+const SELLER_DISTRIBUTION = [1, 1, 1, 2, 2, 3, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const VARIANTS = ['Essential', 'Classic', 'Premium', 'Plus', 'Pro', 'Eco', 'Smart', 'Compact'];
+
+for (let id = 33; id <= 300; id++) {
+  const blueprint = PRODUCT_BLUEPRINTS[(id * 7) % PRODUCT_BLUEPRINTS.length];
+  const baseName = blueprint.names[id % blueprint.names.length];
+  const brandId = blueprint.brands[id % blueprint.brands.length];
+  const statusRoll = id % 20;
+  const status = statusRoll < 14 ? 'Active'
+    : statusRoll < 17 ? 'Pending'
+      : statusRoll === 17 ? 'Inactive' : 'Rejected';
+  const stock = status === 'Active' && id % 13 === 0 ? 0 : 3 + ((id * 11) % 75);
+  const price = blueprint.price + ((id * 137) % Math.max(500, blueprint.price));
+
+  PRODUCTS.push({
+    id,
+    s: SELLER_DISTRIBUTION[(id * 3) % SELLER_DISTRIBUTION.length],
+    c: blueprint.c,
+    b: brandId,
+    name: `${BRANDS.find(b => b.id === brandId).name} ${baseName} ${VARIANTS[id % VARIANTS.length]} ${id}`,
+    price,
+    disc: id % 6 === 0 ? 15 : id % 4 === 0 ? 10 : id % 3 === 0 ? 5 : 0,
+    stock,
+    status,
+    warranty: [null, '3 Months', '6 Months', '1 Year', '2 Years'][id % 5],
+    weight: Number((0.1 + ((id * 17) % 120) / 10).toFixed(2)),
+    created: dateOnly(40 + (id % 195)),
+    desc: `${baseName} with reliable everyday performance, practical design and local after-sales support.`
+  });
+}
+
+let nextAddressId = Math.max(...ADDRESSES.map(a => a.id)) + 1;
+for (const customer of CUSTOMERS) {
+  if (ADDRESSES.some(a => a.user === customer.id)) continue;
+  const user = USERS.find(u => u.id === customer.id);
+  const place = DISTRICTS[customer.id % DISTRICTS.length];
+  ADDRESSES.push({
+    id: nextAddressId++, user: customer.id, label: 'Home', name: user.name,
+    phone: user.phone, street: `House ${10 + customer.id}, Road ${1 + customer.id % 12}, Ward ${1 + customer.id % 20}`,
+    city: place[0], district: place[1], post: place[2], country: 'Bangladesh', def: 1
+  });
+  if (customer.id % 4 === 0) {
+    ADDRESSES.push({
+      id: nextAddressId++, user: customer.id, label: 'Office', name: user.name,
+      phone: user.phone, street: `Office ${customer.id % 15 + 1}, Commercial Area`,
+      city: place[0], district: place[1], post: place[2], country: 'Bangladesh', def: 0
+    });
+  }
+}
+
+const addressByCustomer = new Map();
+for (const address of ADDRESSES) {
+  if (!addressByCustomer.has(address.user)) addressByCustomer.set(address.user, address.id);
+}
+const activeProducts = PRODUCTS.filter(p => p.status === 'Active');
+const customerIds = CUSTOMERS.map(c => c.id);
+
+for (let id = 1027; id <= 1300; id++) {
+  const customerId = customerIds[(id * 7) % customerIds.length];
+  const paymentMethod = 1 + (id % PAYMENT_METHODS.length);
+  const statusRoll = id % 20;
+  const status = statusRoll < 8 ? 'Delivered'
+    : statusRoll < 11 ? 'Pending'
+      : statusRoll < 14 ? 'Processing'
+        : statusRoll < 17 ? 'Shipped' : 'Cancelled';
+  const reward = paymentMethod === 4 && id % 12 === 3;
+  let paid = 'Unpaid';
+  if (paymentMethod === 4) paid = status === 'Cancelled' ? 'Refunded' : 'Paid';
+  else if (paymentMethod === 1) paid = status === 'Delivered' ? 'Paid' : 'Unpaid';
+  else if (status === 'Delivered' || status === 'Shipped') paid = 'Paid';
+
+  const itemCount = 1 + (id % 5);
+  const items = [];
+  const used = new Set();
+  for (let n = 0; n < itemCount; n++) {
+    let product = activeProducts[(id * 11 + n * 37) % activeProducts.length];
+    while (used.has(product.id)) {
+      product = activeProducts[(product.id + n + 1) % activeProducts.length];
+    }
+    used.add(product.id);
+    items.push({ p: product.id, q: 1 + ((id + n) % 3) });
+  }
+
+  ORDERS.push({
+    id, cust: customerId, addr: addressByCustomer.get(customerId), pay: paymentMethod,
+    date: dateTime(80 + ((id - 1027) % 155), id % 10), status, paid, reward, items
+  });
+}
+
+const REVIEW_TEXTS = [
+  'Good quality and exactly as described. Delivery packaging was secure.',
+  'Useful for everyday work and the build quality feels dependable.',
+  'Good value for the price. I would recommend it to other buyers.',
+  'The product works well, although the packaging could be improved.',
+  'Very satisfied after regular use. The size and finish are accurate.',
+  'Performance is better than expected and setup was straightforward.',
+  'A practical purchase with responsive seller support and timely delivery.',
+  'Overall a solid product. The photos and description matched what arrived.'
+];
+for (const order of ORDERS.filter(o => o.status === 'Delivered').slice(12)) {
+  for (const item of order.items) {
+    if (REVIEWS.length >= 220 || (order.id + item.p) % 3 === 0) continue;
+    REVIEWS.push({
+      cust: order.cust,
+      p: item.p,
+      rating: 3 + ((order.id + item.p) % 3),
+      votes: (order.id * item.p) % 31,
+      date: dateOnly(235 + (REVIEWS.length % 25)),
+      text: REVIEW_TEXTS[(order.id + item.p) % REVIEW_TEXTS.length]
+    });
+  }
+}
+
+let nextWalletId = Math.max(...WALLETS.map(w => w.id)) + 1;
+for (const customer of CUSTOMERS) {
+  if (WALLETS.some(w => w.cust === customer.id) || customer.id % 11 === 0) continue;
+  WALLETS.push({
+    id: nextWalletId++, cust: customer.id,
+    balance: Number((500 + ((customer.id * 977) % 45000) + (customer.id % 4) * 0.25).toFixed(2)),
+    points: (customer.id * 43) % 1800
+  });
+}
+
+for (const customer of CUSTOMERS) {
+  if (customer.id % 7 !== 0) {
+    const count = 1 + (customer.id % 5);
+    for (let n = 0; n < count; n++) {
+      const product = activeProducts[(customer.id * 13 + n * 29) % activeProducts.length];
+      if (product.stock > 0 && !CART_ITEMS.some(c => c.cust === customer.id && c.p === product.id)) {
+        CART_ITEMS.push({ cust: customer.id, p: product.id, q: Math.min(1 + n % 3, product.stock) });
+      }
+    }
+  }
+
+  if (customer.id % 9 !== 0) {
+    const count = 2 + (customer.id % 6);
+    for (let n = 0; n < count; n++) {
+      const product = PRODUCTS[(customer.id * 17 + n * 31) % PRODUCTS.length];
+      if (!WISHLIST_ITEMS.some(w => w.cust === customer.id && w.p === product.id)) {
+        WISHLIST_ITEMS.push({ cust: customer.id, p: product.id });
+      }
+    }
+  }
+
+  const searchTerms = ['phone', 'laptop', 'saree', 'shoes', 'watch', 'book', 'charger', 'skincare', 'kitchen', 'bag'];
+  const count = 3 + (customer.id % 5);
+  for (let n = 0; n < count; n++) {
+    const word = searchTerms[(customer.id + n * 3) % searchTerms.length];
+    const results = activeProducts.filter(p => p.name.toLowerCase().includes(word)).length;
+    SEARCHES.push({
+      cust: customer.id, word, results,
+      time: dateTime(215 + ((customer.id + n) % 25), n)
+    });
+  }
+}
+
 const DELIVERY_CHARGE = 60;
 
 // =====================================================================
@@ -318,12 +591,12 @@ function buildImages() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   const rows = [];
-  const views = ['Front view', 'Side view', 'In the box'];
+  const views = ['Front view', 'Side view', 'In use', 'Package contents'];
 
   for (const p of PRODUCTS) {
     const colour = COLOURS[p.id % COLOURS.length];
-    // 2 or 3 pictures each, so the carousel arrows have work to do
-    const count = (p.id % 3 === 0) ? 3 : 2;
+    // Deliberately cover no-image, single-image and gallery scenarios.
+    const count = p.id % 17 === 0 ? 0 : p.id % 7 === 0 ? 1 : 2 + (p.id % 3);
 
     for (let n = 1; n <= count; n++) {
       const fileName = `p${p.id}-${n}.svg`;
@@ -464,9 +737,10 @@ async function run() {
     // -----------------------------------------------------------------
     await insertMany(conn, 'ADDRESS',
       ['AddressID', 'UserID', 'AddressLabel', 'ReceiverName', 'PhoneNumber',
-       'StreetAddress', 'City', 'District', 'PostalCode', 'IsDefault'],
+       'StreetAddress', 'City', 'District', 'PostalCode', 'Country', 'IsDefault'],
       ADDRESSES.map(a => [a.id, a.user, a.label, a.name, a.phone,
-                          a.street, a.city, a.district, a.post, a.def]));
+                          a.street, a.city, a.district, a.post,
+                          a.country || 'Bangladesh', a.def]));
 
     await insertMany(conn, 'PAYMENT_METHOD',
       ['PaymentMethodID', 'MethodName', 'Description'],
@@ -544,8 +818,8 @@ async function run() {
 
     // -----------------------------------------------------------------
     //  WALLETS + TRANSACTIONS
-    //  Every Paid order gets a Payment row; every Refunded one gets a
-    //  Refund row. That mirrors what the Cancel button does live.
+    //  Only wallet/reward payments create wallet ledger entries. COD and
+    //  external Card/bKash examples do not invent wallet transactions.
     // -----------------------------------------------------------------
     await insertMany(conn, 'WALLET',
       ['WalletID', 'CustomerID', 'CurrentBalance', 'RewardPoints'],
@@ -555,22 +829,53 @@ async function run() {
     for (const w of WALLETS) walletOf[w.cust] = w.id;
 
     const txRows = [];
-    for (const w of WALLETS) {
-      txRows.push([w.id, null, 'TopUp', 10000.00, 'Success', '2026-05-01 09:00:00']);
-    }
+    const balancePayments = {};
+    const balanceRefunds = {};
+    const rewardPayments = {};
+    const rewardRefunds = {};
     for (let i = 0; i < ORDERS.length; i++) {
       const o = ORDERS[i];
       const amount = orderRows[i][7];          // TotalAmount, already computed
       const wid = walletOf[o.cust];
       if (!wid) continue;
 
+      if (o.pay !== 4) continue;
+
+      // Reward checkout accepts only whole-taka totals. Decimal orders use
+      // the normal wallet path, matching customerOrderController.
+      const usesReward = o.reward && Number.isInteger(Number(amount));
+      const paymentType = usesReward ? 'Reward Payment' : 'Payment';
+      const refundType = usesReward ? 'Reward Refund' : 'Refund';
       if (o.paid === 'Paid') {
-        txRows.push([wid, o.id, 'Payment', amount, 'Success', o.date]);
+        txRows.push([wid, o.id, paymentType, amount, 'Success', o.date]);
+        const bucket = usesReward ? rewardPayments : balancePayments;
+        bucket[wid] = (bucket[wid] || 0) + Number(amount);
       } else if (o.paid === 'Refunded') {
-        txRows.push([wid, o.id, 'Payment', amount, 'Success', o.date]);
-        txRows.push([wid, o.id, 'Refund',  amount, 'Success', o.date]);
+        txRows.push([wid, o.id, paymentType, amount, 'Success', o.date]);
+        txRows.push([wid, o.id, refundType, amount, 'Success', o.date]);
+        const paidBucket = usesReward ? rewardPayments : balancePayments;
+        const refundBucket = usesReward ? rewardRefunds : balanceRefunds;
+        paidBucket[wid] = (paidBucket[wid] || 0) + Number(amount);
+        refundBucket[wid] = (refundBucket[wid] || 0) + Number(amount);
       }
     }
+
+    // Opening credits make each displayed balance reconcile with its
+    // transaction history: opening credit - payments + refunds = balance.
+    const openingRows = [];
+    for (const w of WALLETS) {
+      const topUp = Number((w.balance + (balancePayments[w.id] || 0) -
+        (balanceRefunds[w.id] || 0)).toFixed(2));
+      const rewardCredit = Number((w.points + (rewardPayments[w.id] || 0) -
+        (rewardRefunds[w.id] || 0)).toFixed(2));
+      if (topUp > 0) {
+        openingRows.push([w.id, null, 'TopUp', topUp, 'Success', '2026-01-02 09:00:00']);
+      }
+      if (rewardCredit > 0) {
+        openingRows.push([w.id, null, 'Reward Credit', rewardCredit, 'Success', '2026-01-03 09:00:00']);
+      }
+    }
+    txRows.unshift(...openingRows);
 
     await insertMany(conn, '`TRANSACTION`',
       ['WalletID', 'OrderID', 'TransactionType', 'Amount', 'Status', 'TransactionDate'],

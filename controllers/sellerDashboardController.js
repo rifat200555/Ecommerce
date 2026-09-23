@@ -54,11 +54,7 @@ async function getDashboard(req, res) {
        WHERE p.SellerID = ? AND o.OrderStatus = 'Pending'`, [sellerId]);
 
     const [salesRows] = await db.query(
-      `SELECT COALESCE(SUM(oi.SubTotal), 0) AS total
-       FROM ORDER_ITEM oi
-       JOIN PRODUCT p    ON p.ProductID = oi.ProductID
-       JOIN \`ORDER\` o  ON o.OrderID = oi.OrderID
-       WHERE p.SellerID = ? AND o.OrderStatus = 'Delivered'`, [sellerId]);
+      'SELECT fn_seller_delivered_sales(?) AS total', [sellerId]);
 
     // --- orders still to deliver -------------------------------------
     //

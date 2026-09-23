@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ecommerce</title>
+  <link rel="stylesheet" href="/seller.css">
+</head>
+<body>
+  <section class="splash-screen" id="splash" aria-label="Ecommerce loading">
+    <div class="splash-logo">
+      <div class="splash-mark">E</div>
+      <h1>Ecommerce</h1>
+      <p>Everything you need, in one place.</p>
+    </div>
+  </section>
+
+  <div class="public-store hidden" id="publicStore">
+    <header class="public-head">
+      <div class="public-brand">Ecommerce</div>
+      <a class="btn primary big" href="/login.html">Login</a>
+    </header>
+
+    <main class="public-content">
+      <section class="public-intro">
+        <h2>Explore our products</h2>
+        <p>Browse available products before signing in.</p>
+      </section>
+
+      <form class="filters" id="filters">
+        <div class="field search-field">
+          <label for="search">Search</label>
+          <input id="search" placeholder="Product name or keyword">
+        </div>
+        <div class="field">
+          <label for="categoryId">Category</label>
+          <select id="categoryId"><option value="">All categories</option></select>
+        </div>
+        <div class="field">
+          <label for="brandId">Brand</label>
+          <select id="brandId"><option value="">All brands</option></select>
+        </div>
+        <div class="field">
+          <label for="minPrice">Minimum price</label>
+          <input id="minPrice" type="number" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="field">
+          <label for="maxPrice">Maximum price</label>
+          <input id="maxPrice" type="number" min="0" step="0.01" placeholder="Any">
+        </div>
+        <div class="field">
+          <label for="sort">Sort</label>
+          <select id="sort">
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="rating">Rating</option>
+            <option value="name">Name</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button class="btn primary" type="submit">Apply</button>
+          <button class="btn" id="clearBtn" type="button">Clear</button>
+        </div>
+      </form>
+
+      <section class="store-state" id="products">Loading products...</section>
+    </main>
+  </div>
+
+<script>
+let metaLoaded = false;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function money(value) {
+  return '\u09F3' + Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function stars(rating) {
+  const full = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  return '\u2605'.repeat(full) + '\u2606'.repeat(5 - full);
+}
+
+function drawFilters(categories, brands) {
+  if (metaLoaded) return;
+
+  const category = document.getElementById('categoryId');
+  for (const item of categories) {
+    category.innerHTML += `<option value="${item.CategoryID}">${escapeHtml(item.CategoryName)}</option>`;
+  }
+
+  const brand = document.getElementById('brandId');
+  for (const item of brands) {
+    brand.innerHTML += `<option value="${item.BrandID}">${escapeHtml(item.BrandName)}</option>`;
+  }
+
+  metaLoaded = true;
+}
+
+function drawProducts(products) {
+  const out = document.getElementById('products');
+  if (products.length === 0) {
+    out.className = 'store-state';
+    out.textContent = 'No products match these filters.';
+    return;
+  }
+
+  out.className = 'product-grid';
+  out.innerHTML = products.map(product => {
+    const price = Number(product.UnitPrice);
+    const discount = Number(product.Discount || 0);
+    const finalPrice = price * (1 - discount / 100);
+    const image = product.ImageURL
+      ? `<img src="${escapeHtml(product.ImageURL)}" alt="${escapeHtml(product.ProductName)}">`
+      : '<span>No image</span>';
+
+    return `<article class="product-card">
+      <div class="product-picture">${image}</div>
+      <div class="product-info">
+        <div class="product-name">${escapeHtml(product.ProductName)}</div>
+        <div class="product-meta">${escapeHtml(product.CategoryName ?? 'Uncategorized')} &middot; ${escapeHtml(product.BrandName ?? 'No brand')}</div>
+        <div>
+          <span class="product-price">${money(finalPrice)}</span>
+          ${discount > 0 ? `<span class="strike">${money(price)}</span><span class="off">${discount}% off</span>` : ''}
+        </div>
+        <div><span class="stars">${stars(product.AverageRating)}</span> ${Number(product.AverageRating || 0).toFixed(1)}</div>
+        <div class="sub">${Number(product.StockQuantity) > 0 ? 'In stock' : 'Out of stock'}</div>
+        <div class="actions"><a class="btn primary" href="/login.html">Login to shop</a></div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  for (const id of ['search', 'categoryId', 'brandId', 'minPrice', 'maxPrice', 'sort']) {
+    const value = document.getElementById(id).value.trim();
+    if (value && !(id === 'sort' && value === 'newest')) params.set(id, value);
+  }
+  return params.toString();
+}
+
+async function loadProducts() {
+  const out = document.getElementById('products');
+  out.className = 'store-state';
+  out.textContent = 'Loading products...';
+
+  try {
+    const query = buildQuery();
+    const res = await fetch('/api/customer/public/products' + (query ? '?' + query : ''));
+    const data = await res.json();
+
+    if (!res.ok) {
+      out.textContent = data.message || 'Could not load products.';
+      return;
+    }
+
+    drawFilters(data.categories, data.brands);
+    drawProducts(data.products);
+  } catch (err) {
+    out.textContent = 'Could not reach the server.';
+  }
+}
+
+document.getElementById('filters').addEventListener('submit', event => {
+  event.preventDefault();
+  loadProducts();
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('filters').reset();
+  loadProducts();
+});
+
+setTimeout(() => {
+  const splash = document.getElementById('splash');
+  document.getElementById('publicStore').classList.remove('hidden');
+  splash.classList.add('leaving');
+  setTimeout(() => splash.remove(), 400);
+}, 3500);
+
+loadProducts();
+</script>
+</body>
+</html>

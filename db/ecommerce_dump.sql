@@ -256,3 +256,121 @@ CREATE TABLE ORDER_ITEM (
   FOREIGN KEY (ProductID) REFERENCES PRODUCT (ProductID)
     ON DELETE RESTRICT
 ) ENGINE=InnoDB;
+
+DELIMITER $$
+
+CREATE FUNCTION fn_seller_delivered_sales(p_seller_id INT)
+RETURNS DECIMAL(12,2)
+READS SQL DATA
+BEGIN
+  DECLARE v_total DECIMAL(12,2);
+
+  SELECT COALESCE(SUM(oi.SubTotal), 0)
+  INTO v_total
+  FROM ORDER_ITEM oi
+  JOIN PRODUCT p ON p.ProductID = oi.ProductID
+  JOIN `ORDER` o ON o.OrderID = oi.OrderID
+  WHERE p.SellerID = p_seller_id
+    AND o.OrderStatus = 'Delivered';
+
+  RETURN v_total;
+END$$
+
+CREATE TRIGGER trg_review_after_insert_update_product_rating
+AFTER INSERT ON REVIEW
+FOR EACH ROW
+BEGIN
+  UPDATE PRODUCT
+  SET AverageRating = COALESCE(
+    (
+      SELECT AVG(Rating)
+      FROM REVIEW
+      WHERE ProductID = NEW.ProductID
+    ),
+    0
+  )
+  WHERE ProductID = NEW.ProductID;
+END$$
+
+CREATE PROCEDURE sp_add_reward_points(
+  IN p_customer_id INT,
+  IN p_points INT
+)
+BEGIN
+  DECLARE v_customer_id INT DEFAULT NULL;
+  DECLARE v_wallet_id INT DEFAULT NULL;
+  DECLARE v_new_points INT DEFAULT 0;
+
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  IF p_points IS NULL OR p_points <= 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Points must be a positive whole number';
+  END IF;
+
+  START TRANSACTION;
+
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_customer_id = NULL;
+
+    SELECT UserID
+    INTO v_customer_id
+    FROM CUSTOMER
+    WHERE UserID = p_customer_id
+    FOR UPDATE;
+  END;
+
+  IF v_customer_id IS NULL THEN
+    ROLLBACK;
+
+    SELECT
+      0 AS CustomerFound,
+      NULL AS WalletID,
+      NULL AS RewardPoints;
+  ELSE
+    BEGIN
+      DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_wallet_id = NULL;
+
+      SELECT WalletID
+      INTO v_wallet_id
+      FROM WALLET
+      WHERE CustomerID = p_customer_id
+      FOR UPDATE;
+    END;
+
+    IF v_wallet_id IS NULL THEN
+      INSERT INTO WALLET (CustomerID, RewardPoints, LastUpdated)
+      VALUES (p_customer_id, p_points, NOW());
+
+      SET v_wallet_id = LAST_INSERT_ID();
+    ELSE
+      UPDATE WALLET
+      SET RewardPoints = RewardPoints + p_points,
+          LastUpdated = NOW()
+      WHERE WalletID = v_wallet_id;
+    END IF;
+
+    INSERT INTO `TRANSACTION`
+      (WalletID, OrderID, TransactionType, Amount, Status)
+    VALUES
+      (v_wallet_id, NULL, 'Reward Credit', p_points, 'Success');
+
+    SELECT RewardPoints
+    INTO v_new_points
+    FROM WALLET
+    WHERE WalletID = v_wallet_id;
+
+    COMMIT;
+
+    SELECT
+      1 AS CustomerFound,
+      v_wallet_id AS WalletID,
+      v_new_points AS RewardPoints;
+  END IF;
+END$$
+
+DELIMITER ;

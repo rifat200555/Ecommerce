@@ -53,7 +53,15 @@ async function chooseRole(role) {
   window.location.href = data.redirect;
 }
 
-document.getElementById('logoutLink').addEventListener('click', () => localStorage.removeItem('token'));
+document.getElementById('logoutLink').addEventListener('click', async event => {
+  event.preventDefault();
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } finally {
+    localStorage.removeItem('token');
+    window.location.href = '/login.html';
+  }
+});
 loadRoles();
 </script>
 </body>

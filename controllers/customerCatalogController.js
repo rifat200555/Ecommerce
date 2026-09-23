@@ -2,7 +2,7 @@ const db = require('../db/connection');
 
 async function getProducts(req, res) {
   try {
-    const customerId = req.user.userId;
+    const customerId = req.user ? req.user.userId : null;
     const search = String(req.query.search || '').trim();
     const categoryId = req.query.categoryId;
     const brandId = req.query.brandId;
@@ -45,7 +45,7 @@ async function getProducts(req, res) {
     let where = "WHERE p.Status = 'Active'";
     const params = [customerId];
 
-    if (search) {
+    if (search && customerId) {
       where += ' AND (p.ProductName LIKE ? OR p.Description LIKE ?)';
       const keyword = `%${search}%`;
       params.push(keyword, keyword);
@@ -283,15 +283,6 @@ async function createReview(req, res) {
       `INSERT INTO REVIEW (CustomerID, ProductID, Rating, ReviewText)
        VALUES (?, ?, ?, ?)`,
       [customerId, productId, rating, reviewText]
-    );
-
-    await conn.query(
-      `UPDATE PRODUCT p
-       SET AverageRating = COALESCE(
-         (SELECT AVG(r.Rating) FROM REVIEW r WHERE r.ProductID = p.ProductID), 0
-       )
-       WHERE p.ProductID = ?`,
-      [productId]
     );
 
     await conn.commit();

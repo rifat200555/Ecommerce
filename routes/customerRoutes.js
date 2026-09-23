@@ -5,6 +5,7 @@ const c = require('../controllers/customerController');
 
 const router = express.Router();
 
+router.get('/public/products', c.getProducts);
 router.get('/me', authMiddleware, customerMiddleware, c.getMe);
 router.get('/products', authMiddleware, customerMiddleware, c.getProducts);
 router.get('/products/:productId', authMiddleware, customerMiddleware, c.getProductById);

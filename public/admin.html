@@ -1,75 +1,107 @@
 <!DOCTYPE html>
-<!-- =====================================================================
-     public/admin.html
-
-     Opens straight onto the Pending list, because approving products
-     is the only thing the admin has to do in this milestone.
-     ===================================================================== -->
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin Panel</title>
   <link rel="stylesheet" href="/seller.css">
 </head>
 <body>
-
 <div class="layout" id="layout">
-
   <aside class="sidebar">
     <div class="side-head">
       <div class="brand hide-when-closed">ADMIN PANEL</div>
       <button id="toggleBtn" title="Toggle sidebar">&#9776;</button>
     </div>
     <div class="seller-box" id="sellerBox"></div>
-    <nav class="nav">
-      <a href="/admin.html" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Product Approval</span></a>
+    <nav class="nav" id="adminNav">
+      <a href="#dashboard" data-section="dashboard" class="active"><span class="ico">&#9635;</span><span class="hide-when-closed">Dashboard</span></a>
+      <a href="#products" data-section="products"><span class="ico">&#9745;</span><span class="hide-when-closed">Products</span></a>
+      <a href="#sellers" data-section="sellers"><span class="ico">&#9673;</span><span class="hide-when-closed">Sellers</span></a>
+      <a href="#users" data-section="users"><span class="ico">&#9679;</span><span class="hide-when-closed">Users &amp; Rewards</span></a>
+      <a href="#orders" data-section="orders"><span class="ico">&#9776;</span><span class="hide-when-closed">Orders</span></a>
+      <a href="#reports" data-section="reports"><span class="ico">&#9652;</span><span class="hide-when-closed">Sales Reports</span></a>
       <a href="/register_admin.html"><span class="ico">+</span><span class="hide-when-closed">Register Admin</span></a>
       <a href="#" class="logout" id="logoutBtn"><span class="ico">&#9099;</span><span class="hide-when-closed">Logout</span></a>
     </nav>
   </aside>
 
   <main class="main">
-    <div class="pagehead"><h2>Product Approval</h2></div>
+    <div class="pagehead"><h2 id="pageTitle">Admin Dashboard</h2></div>
     <div id="toast" class="toast"></div>
 
-    <div class="panel wide" style="margin-bottom:14px;">
-      <h3>Add Reward Points</h3>
-      <form id="rewardForm" class="row2" style="align-items:flex-end;">
-        <div class="field">
-          <label for="rewardCustomer">Customer</label>
-          <select id="rewardCustomer" required><option value="">Loading customers...</option></select>
-        </div>
-        <div class="field">
-          <label for="rewardPoints">Points to add</label>
-          <input id="rewardPoints" type="number" min="1" step="1" required>
-        </div>
-        <div class="field">
-          <button class="btn primary" id="rewardBtn" type="submit">Add Points</button>
-        </div>
-      </form>
-      <div class="sub" id="currentPoints"></div>
-    </div>
+    <section class="admin-section" id="section-dashboard">
+      <div class="cards" id="dashboardCards"><div class="card">Loading dashboard...</div></div>
+    </section>
 
-    <div class="tabs" id="tabs">
-      <a href="?status=Pending">Pending</a>
-      <a href="?status=Active">Approved</a>
-      <a href="?status=Rejected">Rejected</a>
-      <a href="?status=Inactive">Inactive</a>
-      <a href="?status=all">All</a>
-    </div>
+    <section class="admin-section hidden" id="section-products">
+      <div class="tabs" id="productTabs">
+        <button class="btn primary" data-status="Pending">Pending</button>
+        <button class="btn" data-status="Active">Approved</button>
+        <button class="btn" data-status="Rejected">Rejected</button>
+        <button class="btn" data-status="Inactive">Inactive</button>
+        <button class="btn" data-status="all">All</button>
+      </div>
+      <div class="panel wide table-wrap">
+        <table><thead><tr><th>Product</th><th>Seller</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="productBody"><tr><td colspan="6">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
 
-    <div class="panel wide">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:32%">Product</th>
-            <th>Seller</th><th>Price</th><th>Stock</th>
-            <th>Status</th><th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="body"><tr><td colspan="6">Loading...</td></tr></tbody>
-      </table>
-    </div>
+    <section class="admin-section hidden" id="section-sellers">
+      <div class="tabs" id="sellerTabs">
+        <button class="btn primary" data-status="Pending">Pending</button>
+        <button class="btn" data-status="Verified">Verified</button>
+        <button class="btn" data-status="Rejected">Rejected</button>
+        <button class="btn" data-status="all">All</button>
+      </div>
+      <div class="panel wide table-wrap">
+        <table><thead><tr><th>Seller</th><th>Store</th><th>Business contact</th><th>Trade licence</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="sellerBody"><tr><td colspan="6">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <section class="admin-section hidden" id="section-users">
+      <div class="panel wide" style="margin-bottom:14px;">
+        <h3>Add Reward Points</h3>
+        <form id="rewardForm" class="row2" style="align-items:flex-end;">
+          <div class="field"><label for="rewardCustomer">Customer</label><select id="rewardCustomer" required><option value="">Loading customers...</option></select></div>
+          <div class="field"><label for="rewardPoints">Points to add</label><input id="rewardPoints" type="number" min="1" step="1" required></div>
+          <div class="field"><button class="btn primary" id="rewardBtn" type="submit">Add Points</button></div>
+        </form>
+        <div class="sub" id="currentPoints"></div>
+      </div>
+      <div class="panel wide table-wrap">
+        <h3>Registered Users</h3>
+        <p class="sub admin-note">The current USER table has no account-status field, so activation/deactivation is not available.</p>
+        <table><thead><tr><th>User ID</th><th>Full name</th><th>Email</th><th>Role</th><th>Account status</th><th>Registered</th></tr></thead>
+          <tbody id="userBody"><tr><td colspan="6">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <section class="admin-section hidden" id="section-orders">
+      <div class="tabs" id="orderTabs">
+        <button class="btn primary" data-status="all">All</button>
+        <button class="btn" data-status="Pending">Pending</button>
+        <button class="btn" data-status="Processing">Processing</button>
+        <button class="btn" data-status="Shipped">Shipped</button>
+        <button class="btn" data-status="Delivered">Delivered</button>
+        <button class="btn" data-status="Cancelled">Cancelled</button>
+      </div>
+      <div class="panel wide table-wrap">
+        <table><thead><tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Total</th><th>Order status</th><th>Payment</th></tr></thead>
+          <tbody id="orderBody"><tr><td colspan="6">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <section class="admin-section hidden" id="section-reports">
+      <div class="cards" id="reportCards"><div class="card">Loading report...</div></div>
+      <div class="panels">
+        <div class="panel table-wrap"><h3>Sales by Month</h3><table><thead><tr><th>Month</th><th>Delivered orders</th><th>Sales</th></tr></thead><tbody id="monthBody"></tbody></table></div>
+        <div class="panel table-wrap"><h3>Top-selling Products</h3><table><thead><tr><th>Product</th><th>Quantity</th><th>Sales</th></tr></thead><tbody id="topProductBody"></tbody></table></div>
+        <div class="panel wide table-wrap"><h3>Top Sellers</h3><table><thead><tr><th>Seller</th><th>Delivered orders</th><th>Sales</th></tr></thead><tbody id="topSellerBody"></tbody></table></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -78,76 +110,108 @@
 setupSidebar();
 loadAdminBox();
 
-// No ?status in the URL defaults to Pending, so simply typing
-// /admin.html lands you on the work that needs doing.
-const status = new URLSearchParams(window.location.search).get('status') || 'Pending';
+const titles = {
+  dashboard: 'Admin Dashboard', products: 'Product Approval', sellers: 'Seller Approval',
+  users: 'User Management', orders: 'Order Monitoring', reports: 'Sales / Revenue Reports'
+};
+let activeSection = 'dashboard';
+let productStatus = 'Pending';
+let sellerStatus = 'Pending';
+let orderStatus = 'all';
 let rewardCustomers = [];
 
-for (const a of document.querySelectorAll('#tabs a')) {
-  if (a.getAttribute('href') === '?status=' + status) a.classList.add('active');
+function escapeHtml(value) {
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+async function requestJson(url, options) {
+  const res = await authFetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Request failed');
+  return data;
+}
+
+function setActiveButtons(containerId, status) {
+  for (const button of document.querySelectorAll(`#${containerId} [data-status]`)) {
+    button.classList.toggle('primary', button.dataset.status === status);
+  }
+}
+
+async function showSection(name) {
+  if (!titles[name]) name = 'dashboard';
+  activeSection = name;
+  document.getElementById('pageTitle').textContent = titles[name];
+  for (const section of document.querySelectorAll('.admin-section')) section.classList.add('hidden');
+  document.getElementById('section-' + name).classList.remove('hidden');
+  for (const link of document.querySelectorAll('#adminNav [data-section]')) link.classList.toggle('active', link.dataset.section === name);
+  if (window.location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+  try {
+    if (name === 'dashboard') await loadDashboard();
+    else if (name === 'products') await loadProducts();
+    else if (name === 'sellers') await loadSellers();
+    else if (name === 'users') await Promise.all([loadUsers(), loadRewardCustomers()]);
+    else if (name === 'orders') await loadOrders();
+    else if (name === 'reports') await loadReports();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function loadDashboard() {
+  const s = (await requestJson('/api/admin/dashboard')).stats;
+  const cards = [
+    ['Customers', s.TotalCustomers], ['Sellers', s.TotalSellers], ['Products', s.TotalProducts],
+    ['Pending Products', s.PendingProducts], ['Pending Sellers', s.PendingSellers], ['Orders', s.TotalOrders],
+    ['Delivered Orders', s.DeliveredOrders], ['Cancelled Orders', s.CancelledOrders], ['Delivered Revenue', money(s.TotalSales)]
+  ];
+  document.getElementById('dashboardCards').innerHTML = cards.map(item => `<div class="card"><div class="label">${item[0]}</div><div class="value">${item[1]}</div></div>`).join('');
 }
 
 async function loadProducts() {
-  const res = await authFetch('/api/admin/products?status=' + status);
-  if (!res.ok) return;
-
-  const data = await res.json();
-  let rows = '';
-
-  for (const p of data.products) {
-    // Which buttons make sense depends on where the product is now.
+  const data = await requestJson('/api/admin/products?status=' + productStatus);
+  setActiveButtons('productTabs', productStatus);
+  document.getElementById('productBody').innerHTML = data.products.map(p => {
     let buttons = '';
-    if (p.Status === 'Pending') {
-      buttons = `<button class="btn good"   onclick="setStatus(${p.ProductID},'Active')">Approve</button>
-                 <button class="btn danger" onclick="setStatus(${p.ProductID},'Rejected')">Reject</button>`;
-    } else if (p.Status === 'Rejected') {
-      buttons = `<button class="btn good" onclick="setStatus(${p.ProductID},'Active')">Approve anyway</button>`;
-    } else if (p.Status === 'Active') {
-      buttons = `<button class="btn danger" onclick="setStatus(${p.ProductID},'Rejected')">Take down</button>`;
-    }
-
-    rows += `<tr>
-      <td>${p.ProductName}
-          <br><span class="sub">${p.CategoryName ?? '-'} &middot; ${p.BrandName ?? '-'} &middot; added ${shortDate(p.CreatedAt)}</span></td>
-      <td>${p.StoreName}<br><span class="sub">ID ${p.SellerID}</span></td>
-      <td>${money(p.UnitPrice)}${Number(p.Discount) > 0 ? `<br><span class="sub">${p.Discount}% off</span>` : ''}</td>
-      <td>${p.StockQuantity}</td>
-      <td><span class="tag ${p.Status}">${p.Status}</span></td>
-      <td><div class="actions">${buttons || '<span class="sub">-</span>'}</div></td>
-    </tr>`;
-  }
-
-  document.getElementById('body').innerHTML =
-    rows || '<tr><td colspan="6">Nothing here.</td></tr>';
+    if (p.Status === 'Pending') buttons = `<button class="btn good" onclick="setProductStatus(${p.ProductID},'Active')">Approve</button> <button class="btn danger" onclick="setProductStatus(${p.ProductID},'Rejected')">Reject</button>`;
+    else if (p.Status === 'Rejected') buttons = `<button class="btn good" onclick="setProductStatus(${p.ProductID},'Active')">Approve anyway</button>`;
+    else if (p.Status === 'Active') buttons = `<button class="btn danger" onclick="setProductStatus(${p.ProductID},'Rejected')">Take down</button>`;
+    return `<tr><td>${escapeHtml(p.ProductName)}<br><span class="sub">${escapeHtml(p.CategoryName ?? '-')} &middot; ${escapeHtml(p.BrandName ?? '-')}</span></td><td>${escapeHtml(p.StoreName)}<br><span class="sub">ID ${p.SellerID}</span></td><td>${money(p.UnitPrice)}${Number(p.Discount) > 0 ? `<br><span class="sub">${p.Discount}% off</span>` : ''}</td><td>${p.StockQuantity}</td><td><span class="tag ${p.Status}">${p.Status}</span></td><td><div class="actions">${buttons || '<span class="sub">-</span>'}</div></td></tr>`;
+  }).join('') || '<tr><td colspan="6">Nothing here.</td></tr>';
 }
 
-async function setStatus(productId, newStatus) {
-  const res = await authFetch(`/api/admin/products/${productId}/status`, {
-    method: 'PATCH',
-    body: { newStatus }
-  });
-  const data = await res.json();
+async function setProductStatus(productId, newStatus) {
+  try { const data = await requestJson(`/api/admin/products/${productId}/status`, { method: 'PATCH', body: { newStatus } }); toast(data.message, false); await loadProducts(); }
+  catch (err) { toast(err.message, true); }
+}
 
-  toast(data.message, !res.ok);
-  await loadProducts();
+async function loadSellers() {
+  const data = await requestJson('/api/admin/sellers?status=' + sellerStatus);
+  setActiveButtons('sellerTabs', sellerStatus);
+  document.getElementById('sellerBody').innerHTML = data.sellers.map(s => {
+    let buttons = '';
+    if (s.VerificationStatus !== 'Verified') buttons += `<button class="btn good" onclick="setSellerStatus(${s.SellerID},'Verified')">Approve</button> `;
+    if (s.VerificationStatus !== 'Rejected') buttons += `<button class="btn danger" onclick="setSellerStatus(${s.SellerID},'Rejected')">Reject</button>`;
+    return `<tr><td>${escapeHtml(s.FullName)}<br><span class="sub">ID ${s.SellerID} &middot; ${escapeHtml(s.Email)}</span></td><td>${escapeHtml(s.StoreName)}</td><td>${escapeHtml(s.BusinessEmail ?? '-')}<br><span class="sub">${escapeHtml(s.BusinessPhone ?? '-')}</span></td><td>${escapeHtml(s.TradeLicenseNumber ?? '-')}</td><td><span class="tag ${s.VerificationStatus}">${escapeHtml(s.VerificationStatus)}</span></td><td><div class="actions">${buttons}</div></td></tr>`;
+  }).join('') || '<tr><td colspan="6">No sellers found.</td></tr>';
+}
+
+async function setSellerStatus(sellerId, newStatus) {
+  try { const data = await requestJson(`/api/admin/sellers/${sellerId}/status`, { method: 'PATCH', body: { newStatus } }); toast(data.message, false); await loadSellers(); }
+  catch (err) { toast(err.message, true); }
+}
+
+async function loadUsers() {
+  const data = await requestJson('/api/admin/users');
+  document.getElementById('userBody').innerHTML = data.users.map(u => `<tr><td>${u.UserID}</td><td>${escapeHtml(u.FullName)}</td><td>${escapeHtml(u.Email)}</td><td>${escapeHtml(u.Role || 'No role')}</td><td>${escapeHtml(u.AccountStatus)}</td><td>${shortDate(u.RegistrationDate)}</td></tr>`).join('') || '<tr><td colspan="6">No users found.</td></tr>';
 }
 
 async function loadRewardCustomers(selectedId) {
-  const select = document.getElementById('rewardCustomer');
-  const res = await authFetch('/api/admin/customers');
-  const data = await res.json();
-  if (!res.ok) {
-    toast(data.message || 'Could not load customers.', true);
-    return;
-  }
-
+  const data = await requestJson('/api/admin/customers');
   rewardCustomers = data.customers;
+  const select = document.getElementById('rewardCustomer');
   select.innerHTML = '<option value="">Select a customer</option>';
   for (const customer of rewardCustomers) {
-    const option = document.createElement('option');
-    option.value = customer.CustomerID;
-    option.textContent = `${customer.FullName} (${customer.Email})`;
-    select.appendChild(option);
+    const option = document.createElement('option'); option.value = customer.CustomerID;
+    option.textContent = `${customer.FullName} (${customer.Email})`; select.appendChild(option);
   }
   if (selectedId) select.value = String(selectedId);
   showCurrentPoints();
@@ -156,44 +220,49 @@ async function loadRewardCustomers(selectedId) {
 function showCurrentPoints() {
   const customerId = Number(document.getElementById('rewardCustomer').value);
   const customer = rewardCustomers.find(item => item.CustomerID === customerId);
-  document.getElementById('currentPoints').textContent = customer
-    ? `Current Reward Points: ${Number(customer.RewardPoints).toLocaleString()}`
-    : '';
+  document.getElementById('currentPoints').textContent = customer ? `Current Reward Points: ${Number(customer.RewardPoints).toLocaleString()}` : '';
 }
 
+async function loadOrders() {
+  const data = await requestJson('/api/admin/orders?status=' + orderStatus);
+  setActiveButtons('orderTabs', orderStatus);
+  document.getElementById('orderBody').innerHTML = data.orders.map(o => `<tr><td>#${o.OrderID}</td><td>${escapeHtml(o.CustomerName)}<br><span class="sub">${escapeHtml(o.CustomerEmail)}</span></td><td>${shortDate(o.OrderDate)}</td><td>${money(o.TotalAmount)}</td><td><span class="tag ${o.OrderStatus}">${o.OrderStatus}</span></td><td>${escapeHtml(o.PaymentStatus)}</td></tr>`).join('') || '<tr><td colspan="6">No orders found.</td></tr>';
+}
+
+async function loadReports() {
+  const data = await requestJson('/api/admin/reports/sales');
+  const s = data.summary;
+  document.getElementById('reportCards').innerHTML = [['Total Sales', money(s.TotalSales)], ['Delivered Orders', s.DeliveredOrders], ['Cancelled Orders', s.CancelledOrders], ['Refunded Orders', s.RefundedOrders]].map(item => `<div class="card"><div class="label">${item[0]}</div><div class="value">${item[1]}</div></div>`).join('');
+  document.getElementById('monthBody').innerHTML = data.salesByMonth.map(row => `<tr><td>${row.SalesMonth}</td><td>${row.DeliveredOrders}</td><td>${money(row.TotalSales)}</td></tr>`).join('') || '<tr><td colspan="3">No delivered sales.</td></tr>';
+  document.getElementById('topProductBody').innerHTML = data.topProducts.map(row => `<tr><td>${escapeHtml(row.ProductName)}</td><td>${row.QuantitySold}</td><td>${money(row.ProductSales)}</td></tr>`).join('') || '<tr><td colspan="3">No delivered products.</td></tr>';
+  document.getElementById('topSellerBody').innerHTML = data.topSellers.map(row => `<tr><td>${escapeHtml(row.StoreName)} <span class="sub">#${row.SellerID}</span></td><td>${row.DeliveredOrders}</td><td>${money(row.SellerSales)}</td></tr>`).join('') || '<tr><td colspan="3">No delivered sales.</td></tr>';
+}
+
+for (const link of document.querySelectorAll('#adminNav [data-section]')) link.addEventListener('click', event => { event.preventDefault(); showSection(link.dataset.section); });
+for (const button of document.querySelectorAll('#productTabs [data-status]')) button.addEventListener('click', () => { productStatus = button.dataset.status; loadProducts().catch(err => toast(err.message, true)); });
+for (const button of document.querySelectorAll('#sellerTabs [data-status]')) button.addEventListener('click', () => { sellerStatus = button.dataset.status; loadSellers().catch(err => toast(err.message, true)); });
+for (const button of document.querySelectorAll('#orderTabs [data-status]')) button.addEventListener('click', () => { orderStatus = button.dataset.status; loadOrders().catch(err => toast(err.message, true)); });
 document.getElementById('rewardCustomer').addEventListener('change', showCurrentPoints);
-document.getElementById('rewardForm').addEventListener('submit', async (event) => {
+document.getElementById('rewardForm').addEventListener('submit', async event => {
   event.preventDefault();
   const customerId = Number(document.getElementById('rewardCustomer').value);
   const points = Number(document.getElementById('rewardPoints').value);
-  if (!Number.isInteger(customerId) || customerId <= 0 ||
-      !Number.isInteger(points) || points <= 0) {
-    toast('Select a customer and enter a positive whole number of points.', true);
-    return;
-  }
-
-  const button = document.getElementById('rewardBtn');
-  button.disabled = true;
+  if (!Number.isInteger(customerId) || customerId <= 0 || !Number.isInteger(points) || points <= 0) { toast('Select a customer and enter a positive whole number of points.', true); return; }
+  const button = document.getElementById('rewardBtn'); button.disabled = true;
   try {
-    const res = await authFetch(`/api/admin/customers/${customerId}/reward-points`, {
-      method: 'POST', body: { points }
-    });
-    const data = await res.json();
-    toast(data.message, !res.ok);
-    if (res.ok) {
-      document.getElementById('rewardPoints').value = '';
-      await loadRewardCustomers(customerId);
-    }
-  } catch (err) {
-    toast('Could not reach the server.', true);
-  } finally {
-    button.disabled = false;
-  }
+    const data = await requestJson(`/api/admin/customers/${customerId}/reward-points`, { method: 'POST', body: { points } });
+    toast(data.message, false); document.getElementById('rewardPoints').value = ''; await loadRewardCustomers(customerId);
+  } catch (err) { toast(err.message, true); }
+  finally { button.disabled = false; }
 });
 
-loadProducts();
-loadRewardCustomers();
-autoRefresh(loadProducts, 5);
+showSection(location.hash.slice(1) || 'dashboard');
+autoRefresh(() => {
+  if (activeSection === 'dashboard') loadDashboard();
+  else if (activeSection === 'products') loadProducts();
+  else if (activeSection === 'sellers') loadSellers();
+  else if (activeSection === 'orders') loadOrders();
+}, 10);
 </script>
 </body>
 </html>

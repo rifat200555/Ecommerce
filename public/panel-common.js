@@ -67,9 +67,13 @@ function setupSidebar() {
 
   const logout = document.getElementById('logoutBtn');
   if (logout) {
-    logout.addEventListener('click', () => {
-      localStorage.removeItem('token');
-      window.location.href = '/login.html';
+    logout.addEventListener('click', async () => {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } finally {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+      }
     });
   }
 }

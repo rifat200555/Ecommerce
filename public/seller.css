@@ -13,7 +13,7 @@ body {
 }
 
 /* ---------------- layout ---------------- */
-.layout { display: flex; min-height: 100vh; }
+.layout { display: flex; height: 100vh; overflow: hidden; }
 
 .sidebar {
   width: 230px;
@@ -32,7 +32,7 @@ body {
 .layout.closed .sidebar { width: 54px; padding: 12px 8px; }
 .layout.closed .hide-when-closed { display: none; }
 
-.main { flex: 1; padding: 16px 22px; min-width: 0; }
+.main { flex: 1; height: 100vh; padding: 16px 22px; min-width: 0; overflow-y: auto; }
 
 /* ---------------- sidebar ---------------- */
 .side-head {
@@ -124,6 +124,9 @@ body {
 }
 .panel.wide { flex: 1 1 100%; }
 .panel h3 { font-size: 14px; margin-bottom: 10px; }
+.admin-section.hidden { display: none; }
+.table-wrap { overflow-x: auto; }
+.admin-note { margin: -4px 0 10px; }
 
 /* ---------------- tables ---------------- */
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -299,6 +302,41 @@ td { padding: 8px 5px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 .store-state {
   background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
   padding: 35px; color: #64748b; text-align: center;
+}
+
+/* ---------------- public storefront ---------------- */
+.splash-screen {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: #0f172a; color: #fff;
+  transition: opacity .4s ease;
+}
+.splash-screen.leaving { opacity: 0; pointer-events: none; }
+.splash-logo { text-align: center; }
+.splash-mark {
+  width: 72px; height: 72px; margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 18px; background: #2563eb;
+  font-size: 34px; font-weight: bold;
+}
+.splash-logo h1 { font-size: 30px; letter-spacing: .5px; }
+.splash-logo p { margin-top: 7px; color: #94a3b8; }
+.public-store { min-height: 100vh; }
+.public-store.hidden { display: none; }
+.public-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 14px 24px;
+  background: #0f172a; color: #fff;
+}
+.public-brand { font-size: 18px; font-weight: bold; letter-spacing: .5px; }
+.public-content { max-width: 1280px; margin: 0 auto; padding: 24px; }
+.public-intro { margin-bottom: 18px; }
+.public-intro h2 { font-size: 24px; margin-bottom: 5px; }
+.public-intro p { color: #64748b; }
+
+@media (max-width: 700px) {
+  .public-head { padding: 12px 16px; }
+  .public-content { padding: 18px 14px; }
 }
 
 .buy-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 15px; }

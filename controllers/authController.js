@@ -1,6 +1,16 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db/connection');
+const authMiddleware = require('../middleware/authMiddleware');
+
+const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000;
+
+function setAuthCookie(res, token) {
+  res.cookie(authMiddleware.cookieName, token, {
+    ...authMiddleware.cookieOptions,
+    maxAge: AUTH_COOKIE_MAX_AGE
+  });
+}
 
 async function getRoles(queryable, userId) {
   const [admins] = await queryable.query(
@@ -68,6 +78,7 @@ async function login(req, res) {
       ? redirectForRole(roles[0])
       : '/role-selection.html';
 
+    setAuthCookie(res, token);
     res.json({ success: true, token, fullName: user.FullName, roles, redirect });
   } catch (err) {
     console.error(err);
@@ -140,6 +151,7 @@ async function register_seller(req, res) {
     await conn.commit();
 
     const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    setAuthCookie(res, token);
     res.status(201).json({
       success: true,
       message: 'Seller role added.',
@@ -213,6 +225,7 @@ async function register_customer(req, res) {
     await conn.commit();
 
     const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    setAuthCookie(res, token);
     res.status(201).json({
       success: true,
       message: 'Customer role added.',
@@ -261,10 +274,16 @@ async function selectRole(req, res) {
   }
 }
 
+function logout(req, res) {
+  res.clearCookie(authMiddleware.cookieName, authMiddleware.cookieOptions);
+  res.json({ success: true });
+}
+
 module.exports = {
   login,
   register_customer,
   register_seller,
   getMyRoles,
-  selectRole
+  selectRole,
+  logout
 };
